@@ -6,7 +6,8 @@ const app = express();
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static("public"));
 
-const { API_BASE, AUTH_PATH, UNL_USER, UNL_PASSWORD, UPCOMING_PATH } = process.env;
+const { API_BASE, AUTH_PATH, UNL_USER, UNL_PASSWORD, UPCOMING_PATH, MAP_PATH, PERFORMANCE_PATH, ORDER_PATH } = process.env;
+
 if (!API_BASE || !AUTH_PATH || !UNL_USER || !UNL_PASSWORD) {
   console.error("Missing API_BASE, AUTH_PATH, UNL_USER, or UNL_PASSWORD in .env");
   process.exit(1);
@@ -111,8 +112,12 @@ app.get("/events/upcoming", async (_req, res) => {
     if (!UPCOMING_PATH)   return res.status(500).json({ error: "UPCOMING_PATH not configured" });
 
     const url = new URL(UPCOMING_PATH, API_BASE).toString();
+    console.log("req", _req.query);
+    const movePage = parseInt(_req.query.movePage);
+    const method = movePage == 1 ? "nextPage" : movePage == -1 ? "prevPage" : "search";
+    console.log("method", method, "movePage", movePage);
     const payload = {
-      actions: [{ method: "search" }],
+      actions: [{ method: method }],
       set: {
         "SearchCriteria::object_type_filter": "P",
         "SearchCriteria::search_criteria": "",
@@ -137,9 +142,7 @@ app.get("/events/upcoming", async (_req, res) => {
       },
       body: JSON.stringify(payload)
     };
-
-    console.log("Request options:", requestOptions);
-
+    console.log("requestOptions", requestOptions);
     const r = await fetch(url, requestOptions);
 
     // 🥐 capture & merge any cookies the endpoint sets (Cloudflare, etc.)
@@ -221,49 +224,157 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`Demo UI at http://localhost:${port}`));
 
 
-app.get("/events/:id", async (req, res) => {
-  const { id } = req.params;
+// POST /map/availability/:performanceId  -> calls AV map.loadAvailability
+app.post("/map/availability/:id", async (req, res) => {
+  try {
+    if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
+    if (!ORDER_PATH) return res.status(500).json({ error: "ORDER_PATH not configured" });
 
-  // Minimal mock matching your field structure
-  const mockEvent = {
-    id: { standard: id },
-    name: { standard: "Sample Event " + id.slice(0, 8) },
-    description: { standard: "This is a mock description for the event." },
-    start_date: { display: "Sep 15, 2025 – 19:30" },
-    end_date: { display: "Sep 15, 2025 – 22:00" },
-    image1: { standard: "" },         // your index.html uses image1
-    logo1: { standard: "" },          // your inspiration used logo1
-    city: { standard: "Santiago" },
-    availability_num: { standard: 150 },
-    venue_name: { standard: "Main Hall" },
-    min_price: { display: "$40.00", standard: "40.00" },
-    max_price: { display: "$75.00", standard: "75.00" }
-  };
+    const performanceId = req.params.id;
+    const priceTypeId = req.body?.priceTypeId;
+    const { numSeats = 2 } = req.body?.numSeats;
 
-  res.json(mockEvent);
+    const url = new URL(ORDER_PATH, API_BASE).toString();
+    const payload = {
+      actions: [
+        {
+          method: "getBestAvailable",
+          params: {
+            perfVector: [performanceId],
+            reqRows: "1",
+            [`reqNum${priceTypeId}`]: String(numSeats)
+          }
+        }
+      ],
+      get: ["Admissions", "AvailablePaymentMethods", "DeliveryMethodDetails"],
+      objectName: "myOrder"
+    };
+
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const setCookie = r.headers.get("set-cookie");
+    if (setCookie) {
+      const pairs = parseSetCookieHeader(setCookie);
+      CURRENT_COOKIES = mergeCookiePairs(CURRENT_COOKIES, pairs);
+    }
+
+    const raw = await r.text();
+    let data; try { data = JSON.parse(raw); } catch { data = raw; }
+
+    if (!r.ok) {
+      return res.status(r.status).json({ error: "getBestAvailable failed", details: data });
+    }
+
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
 });
 
-// --- MOCK: Best available seats for an event ---
-app.post("/order/bestavailable/:id", async (req, res) => {
-  const { id } = req.params;
-  const { numPeople = 1 } = req.body || {};
+// GET /events/:id  -> calls PERFORMANCE_PATH with Session + Cookie
+// method call is PERFORMANCE_PATH
+// GET /events/:id -> AV performance.load
+app.get("/events/:id", async (req, res) => {
+  try {
+    if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
 
-  // Make N mock "admissions"
-  const admissions = Array.from({ length: Number(numPeople) || 1 }, (_, i) => ({
-    admission_id: { standard: `${id}-ADM-${i + 1}` },
-    row: { standard: String.fromCharCode(65 + i) },     // A, B, C...
-    seat: { standard: String(10 + i) },
-    aisle: { standard: i % 2 === 0 ? "Left" : "Right" },
-    net: { display: "$50.00", standard: "50.00" },
-  }));
+    const performanceId = req.params.id;
+    const url = new URL(PERFORMANCE_PATH, API_BASE).toString();
 
-  const paymentMethods = [
-    { id: { standard: "pm-card" }, name: { standard: "Card" } },
-    { id: { standard: "pm-wallet" }, name: { standard: "Wallet" } },
-  ];
+    const payload = {
+      actions: [
+        {
+          method: "load",
+          params: { Performance: { performance_id: performanceId } }
+        }
+      ],
+      get: ["Performance"]
+    };
 
-  res.json({
-    Admissions: admissions,
-    AvailablePaymentMethods: paymentMethods
-  });
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    // merge any cookies the endpoint sets
+    const setCookie = r.headers.get("set-cookie");
+    if (setCookie) {
+      const pairs = parseSetCookieHeader(setCookie);
+      CURRENT_COOKIES = mergeCookiePairs(CURRENT_COOKIES, pairs);
+    }
+
+    const raw = await r.text();
+    let data; try { data = JSON.parse(raw); } catch { data = raw; }
+
+    if (!r.ok) {
+      return res.status(r.status).json({ error: "performance.load failed", details: data });
+    }
+
+    // AV usually returns { data: { Performance: {...fields...} } }
+    const perf = data?.data?.Performance;
+    if (!perf) {
+      return res.status(404).json({ error: "Performance not found", details: data });
+    }
+
+    // return the object as-is; your front-end expects { name: {standard}, ... }
+    res.json(perf);
+  } catch (err) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+// POST /map/pricing/:id -> AV map.loadMap (get pricing only)
+app.post("/map/pricing/:id", async (req, res) => {
+  try {
+    if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
+    if (!MAP_PATH) return res.status(500).json({ error: "MAP_PATH not configured" });
+
+    const performanceId = req.params.id;
+    const { promocode_access_code = "" } = req.body || {};
+    const url = new URL(MAP_PATH, API_BASE).toString();
+
+    const payload = {
+      actions: [
+        {
+          method: "loadMap",
+          params: { performance_ids: [performanceId], promocode_access_code }
+        }
+      ],
+      get: ["pricetypes"]
+    };
+
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const setCookie = r.headers.get("set-cookie");
+    if (setCookie) {
+      const pairs = parseSetCookieHeader(setCookie);
+      CURRENT_COOKIES = mergeCookiePairs(CURRENT_COOKIES, pairs);
+    }
+
+    const raw = await r.text();
+    let data; try { data = JSON.parse(raw); } catch { data = raw; }
+
+    if (!r.ok) return res.status(r.status).json({ error: "loadMap(pricing) failed", details: data });
+
+    res.json(data); // pass through
+  } catch (err) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
 });

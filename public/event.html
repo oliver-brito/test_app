@@ -46,6 +46,9 @@
     <div class="controls">
       <label for="num">People:</label>
       <input id="num" class="input" type="number" min="1" value="1"/>
+      <label for="pricetype">Price Type:</label>
+      <select id="pricetype" class="input"></select>
+      <input id="pricetype_value" type="hidden" />
       <button id="best" class="btn">Get Seats & Add</button>
       <a id="checkout" class="btn btn-secondary" href="checkout.html" style="display:none;">Checkout</a>
     </div>
@@ -69,6 +72,8 @@
     const $error = document.getElementById("error");
     const $seats = document.getElementById("seats");
     const $num   = document.getElementById("num");
+    const $pricetype = document.getElementById("pricetype");
+    const $pricetype_value = document.getElementById("pricetype_value");
     const $best  = document.getElementById("best");
     const $checkout = document.getElementById("checkout");
 
@@ -84,19 +89,73 @@
       $error.textContent = msg;
     }
 
-    function renderEvent(ev) {
-      $title.textContent = ev.name?.standard ?? "Untitled event";
-      $image.src = fallbackImage(ev.image1?.standard || ev.logo1?.standard || "");
-      $desc.textContent = ev.description?.standard ?? "";
-      $start.textContent = ev.start_date?.display ?? "—";
-      $end.textContent   = ev.end_date?.display ?? "—";
-      $venue.textContent = ev.venue_name?.standard ?? "—";
-      $city.textContent  = ev.city?.standard ?? "—";
-      const minp = ev.min_price?.display ?? "";
-      const maxp = ev.max_price?.display ?? "";
-      $price.textContent = minp && maxp ? `${minp} – ${maxp}` : (minp || maxp || "—");
-      $avail.textContent = ev.availability_num?.standard ?? "—";
+    function parseMoney(s) {
+      if (s == null) return NaN;
+      if (typeof s === "number") return s;
+      return parseFloat(String(s).replace(/[^\d.]/g, ""));
     }
+    function pricingMinMax(pricingObj) {
+      if (!pricingObj || typeof pricingObj !== "object") return null;
+      const rows = Object.entries(pricingObj).filter(([k]) => k !== "state").map(([, v]) => v);
+      const amounts = [];
+      for (const row of rows) {
+        const std = row?.amounts?.standard;
+        if (Array.isArray(std)) {
+          for (const amt of std) {
+            const n = parseMoney(amt);
+            if (Number.isFinite(n)) amounts.push(n);
+          }
+        } else {
+          const n = parseMoney(std);
+          if (Number.isFinite(n)) amounts.push(n);
+        }
+      }
+      if (!amounts.length) return null;
+      return { min: Math.min(...amounts), max: Math.max(...amounts) };
+    }
+
+// Helpers to read AV fields safely (string or display[0])
+    function avText(node) {
+      if (!node) return "";
+      const v = node.display ?? node.standard ?? "";
+      return Array.isArray(v) ? (v[0] ?? "") : v;
+    }
+    function avImg(...nodes) {
+      for (const n of nodes) {
+        const src = avText(n);
+        if (src && String(src).trim()) return src;
+      }
+      return "";
+    }
+
+    function renderEvent(ev) {
+      // Title (prefer short_description if present)
+      $title.textContent = avText(ev.short_description) || avText(ev.name) || "Untitled event";
+
+      // Image (fallback chain since there's no image1 here)
+      const imgSrc = avImg(ev.logo1, ev.alternative_overview_image, ev.thumbnail, ev.app_image);
+      $image.src = fallbackImage(imgSrc);
+
+      // Description
+      $desc.textContent = avText(ev.description) || "";
+
+      // Dates (handle arrays in display)
+      $start.textContent = avText(ev.start_date) || "—";
+      $end.textContent   = avText(ev.end_date)   || "—";
+
+      // Venue (performance payload has venue_short_description, not venue_name)
+      $venue.textContent = avText(ev.venue_short_description) || "—";
+
+      // City not provided by performance.load
+      $city.textContent = "—";
+
+      // Price range not provided here
+      $price.textContent = "—";
+
+      // Availability: use total_seats as a coarse indicator (no live availability here)
+      $avail.textContent = avText(ev.total_seats) || "—";
+    }
+
 
     function renderSeats(list) {
       $seats.innerHTML = "";
@@ -129,36 +188,95 @@
         if (!r.ok) throw new Error("Failed to load event");
         const ev = await r.json();
         renderEvent(ev);
+        console.log("Event loaded:", ev);
       } catch (e) {
         console.error(e);
         showError("Couldn't load event. Please try again.");
       }
     }
 
-    async function getBestAvailable() {
-      const n = Math.max(1, parseInt($num.value, 10) || 1);
+async function getBestAvailable() {
+    const n = Math.max(1, parseInt($num.value, 10) || 1);
+    const priceTypeId = $pricetype.value;
+    try {
+      const r = await fetch(`/map/availability/${encodeURIComponent(eventId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ numSeats: n, priceTypeId })
+      });
+      if (!r.ok) throw new Error("Failed to load availability");
+      const data = await r.json();
+
+      // Store raw data for later steps (pricing/checkout wiring)
+      localStorage.setItem("availability", JSON.stringify(data?.data?.availability ?? {}));
+      localStorage.setItem("pricing", JSON.stringify(data?.data?.pricing ?? {}));
+      localStorage.setItem("pricetypes", JSON.stringify(data?.data?.pricetypes ?? {}));
+      localStorage.setItem("legends", JSON.stringify(data?.data?.legends ?? {}));
+
+      // For now, render a simple summary using availability (no seat selection yet)
+      const av = data?.data?.availability ?? {};
+      const flat = Array.isArray(av) ? av : Object.values(av);
+      // Quick visualization: show up to first 5 availability entries
+      const preview = flat.slice(0, 5).map((a, i) => ({
+        section: a?.section ?? a?.name ?? `Zone ${i+1}`,
+        available: a?.available ?? a?.available_count ?? a?.seats_available ?? "—",
+        priceType: a?.price_type ?? a?.priceType ?? ""
+      }));
+
+      // Convert to "seats" UI shape temporarily so the list renders something useful
+      const pseudoSeats = preview.map((p, i) => ({
+        row: { standard: p.section },
+        seat: { standard: p.available },
+        aisle: { standard: p.priceType || "-" },
+        net: { display: "" }
+      }));
+
+      renderSeats(pseudoSeats);
+      $checkout.style.display = ""; // keep showing checkout; we’ll wire it next
+    } catch (e) {
+      console.error(e);
+      showError("Couldn't load availability. Please try again.");
+    }
+  }
+
+    // Fetch price types from /map/pricing/:id and populate dropdown
+    async function populatePriceTypes() {
+      console.log("Loading price types for event:", eventId);
+      $pricetype.innerHTML = '';
+      if (!eventId) return;
       try {
-        const r = await fetch(`/order/bestavailable/${encodeURIComponent(eventId)}`, {
+        const r = await fetch(`/map/pricing/${encodeURIComponent(eventId)}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ numPeople: n })
+          body: JSON.stringify({})
         });
-        if (!r.ok) throw new Error("Failed to fetch seats");
+        if (!r.ok) throw new Error("Failed to load price types");
         const data = await r.json();
-        // mimic your other app’s localStorage usage
-        localStorage.setItem("seats", JSON.stringify(data.Admissions || []));
-        localStorage.setItem("paymentMethods", JSON.stringify(data.AvailablePaymentMethods || []));
-        renderSeats(data.Admissions || []);
-        $checkout.style.display = ""; // show checkout button
+        const pricetypes = data?.data?.pricetypes;
+        if (pricetypes && typeof pricetypes === "object") {
+          Object.entries(pricetypes).forEach(([id, pt]) => {
+            if (id === "state") return;
+            const name = pt?.name?.display || pt?.name?.standard || id;
+            const opt = document.createElement("option");
+            opt.value = id;
+            opt.textContent = name;
+            $pricetype.appendChild(opt);
+          });
+        }
+        $pricetype_value.value = $pricetype.value || "";
       } catch (e) {
-        console.error(e);
-        showError("Couldn't fetch seats. Please try again.");
+        showError("Couldn't load price types. Please try again.");
       }
     }
+
+    $pricetype.addEventListener("change", function() {
+      $pricetype_value.value = $pricetype.value;
+    });
 
     $best.addEventListener("click", getBestAvailable);
     loadEvent();
     renderSeats([]); // initial
+    populatePriceTypes();
   </script>
 </body>
 </html>
