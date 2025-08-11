@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Event Details</title>
+  <style>
+    :root { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+    body { margin: 16px; background: #fafafa; }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 1.75rem; margin: 0 0 16px; }
+    .row { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 16px; }
+    .thumb { width: 320px; height: 200px; object-fit: cover; border-radius: 8px; background: #e5e7eb; }
+    .muted { color: #6b7280; margin: 4px 0; }
+    .controls { display: flex; gap: 8px; align-items: center; margin: 20px 0; }
+    .input { width: 100px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 8px; }
+    .btn { appearance: none; background: #3b82f6; color: #fff; border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 600; cursor: pointer; }
+    .btn-secondary { background: #16a34a; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+    .seats { list-style: none; padding: 0; display: grid; gap: 10px; }
+    .seat { display: flex; justify-content: space-between; align-items: center; padding: 10px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; }
+    .error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; padding: 10px; border-radius: 8px; margin: 10px 0; }
+    a.link { color: #2563eb; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a class="link" href="index.html">← Back to events</a>
+    <h1 id="title">Loading…</h1>
+
+    <div id="error" class="error" style="display:none;"></div>
+
+    <div class="row">
+      <img id="image" class="thumb" alt="Event image" src="av.webp" />
+      <div>
+        <p id="desc" class="muted"></p>
+        <p class="muted"><strong>Start:</strong> <span id="start">—</span></p>
+        <p class="muted"><strong>End:</strong> <span id="end">—</span></p>
+        <p class="muted"><strong>Venue:</strong> <span id="venue">—</span></p>
+        <p class="muted"><strong>City:</strong> <span id="city">—</span></p>
+        <p class="muted"><strong>Availability:</strong> <span id="avail">—</span></p>
+        <p class="muted"><strong>Price:</strong> <span id="price">—</span></p>
+      </div>
+    </div>
+
+    <div class="controls">
+      <label for="num">People:</label>
+      <input id="num" class="input" type="number" min="1" value="1"/>
+      <button id="best" class="btn">Get Seats & Add</button>
+      <a id="checkout" class="btn btn-secondary" href="checkout.html" style="display:none;">Checkout</a>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 10px;">Selected seats</h3>
+      <ul id="seats" class="seats"></ul>
+    </div>
+  </div>
+
+  <script>
+    const $title = document.getElementById("title");
+    const $image = document.getElementById("image");
+    const $desc  = document.getElementById("desc");
+    const $start = document.getElementById("start");
+    const $end   = document.getElementById("end");
+    const $venue = document.getElementById("venue");
+    const $city  = document.getElementById("city");
+    const $avail = document.getElementById("avail");
+    const $price = document.getElementById("price");
+    const $error = document.getElementById("error");
+    const $seats = document.getElementById("seats");
+    const $num   = document.getElementById("num");
+    const $best  = document.getElementById("best");
+    const $checkout = document.getElementById("checkout");
+
+    const params = new URLSearchParams(location.search);
+    const eventId = params.get("id");
+
+    function fallbackImage(src) {
+      return src && src.trim() ? src : "av.webp";
+    }
+
+    function showError(msg) {
+      $error.style.display = "";
+      $error.textContent = msg;
+    }
+
+    function renderEvent(ev) {
+      $title.textContent = ev.name?.standard ?? "Untitled event";
+      $image.src = fallbackImage(ev.image1?.standard || ev.logo1?.standard || "");
+      $desc.textContent = ev.description?.standard ?? "";
+      $start.textContent = ev.start_date?.display ?? "—";
+      $end.textContent   = ev.end_date?.display ?? "—";
+      $venue.textContent = ev.venue_name?.standard ?? "—";
+      $city.textContent  = ev.city?.standard ?? "—";
+      const minp = ev.min_price?.display ?? "";
+      const maxp = ev.max_price?.display ?? "";
+      $price.textContent = minp && maxp ? `${minp} – ${maxp}` : (minp || maxp || "—");
+      $avail.textContent = ev.availability_num?.standard ?? "—";
+    }
+
+    function renderSeats(list) {
+      $seats.innerHTML = "";
+      if (!list || list.length === 0) {
+        $seats.insertAdjacentHTML("beforeend", `<li class="muted">No seats selected yet.</li>`);
+        return;
+      }
+      for (const s of list) {
+        const li = document.createElement("li");
+        li.className = "seat";
+        li.innerHTML = `
+          <div>
+            <div><strong>Row:</strong> ${s.row?.standard ?? "—"}</div>
+            <div><strong>Seat:</strong> ${s.seat?.standard ?? "—"}</div>
+            <div><strong>Aisle:</strong> ${s.aisle?.standard ?? "—"}</div>
+          </div>
+          <div><strong>${s.net?.display ?? "—"}</strong></div>
+        `;
+        $seats.appendChild(li);
+      }
+    }
+
+    async function loadEvent() {
+      if (!eventId) {
+        showError("Missing event id.");
+        return;
+      }
+      try {
+        const r = await fetch(`/events/${encodeURIComponent(eventId)}`);
+        if (!r.ok) throw new Error("Failed to load event");
+        const ev = await r.json();
+        renderEvent(ev);
+      } catch (e) {
+        console.error(e);
+        showError("Couldn't load event. Please try again.");
+      }
+    }
+
+    async function getBestAvailable() {
+      const n = Math.max(1, parseInt($num.value, 10) || 1);
+      try {
+        const r = await fetch(`/order/bestavailable/${encodeURIComponent(eventId)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ numPeople: n })
+        });
+        if (!r.ok) throw new Error("Failed to fetch seats");
+        const data = await r.json();
+        // mimic your other app’s localStorage usage
+        localStorage.setItem("seats", JSON.stringify(data.Admissions || []));
+        localStorage.setItem("paymentMethods", JSON.stringify(data.AvailablePaymentMethods || []));
+        renderSeats(data.Admissions || []);
+        $checkout.style.display = ""; // show checkout button
+      } catch (e) {
+        console.error(e);
+        showError("Couldn't fetch seats. Please try again.");
+      }
+    }
+
+    $best.addEventListener("click", getBestAvailable);
+    loadEvent();
+    renderSeats([]); // initial
+  </script>
+</body>
+</html>
