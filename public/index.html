@@ -4,6 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Upcoming Events</title>
+  <script src="helpers.js"></script>
   <style>
     :root { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
     body { margin: 16px; background: #fafafa; }
@@ -39,6 +40,7 @@
     // --- Placeholder functions (cookies removed) ---
     async function Authenticate() {
         const r = await fetch("/login", { method: "POST" });
+        console.log("Login SAKJDFSADJKF:", r);
         if (!r.ok) throw new Error("Login failed");
         return r.json(); // { session, version }
     }
@@ -61,9 +63,7 @@
     const $prevPage = document.getElementById("prevPage");
     const $nextPage = document.getElementById("nextPage");
 
-    function fallbackImage(src) {
-      return src && src.trim() ? src : "av.webp";
-    }
+    // fallbackImage is now provided by helpers.js
 
     function createEventItem(event) {
       const li = document.createElement("li");

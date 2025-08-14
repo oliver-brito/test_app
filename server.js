@@ -1,3 +1,4 @@
+
 import express from "express";
 import dotenv from "dotenv";
 dotenv.config();
@@ -112,10 +113,8 @@ app.get("/events/upcoming", async (_req, res) => {
     if (!UPCOMING_PATH)   return res.status(500).json({ error: "UPCOMING_PATH not configured" });
 
     const url = new URL(UPCOMING_PATH, API_BASE).toString();
-    console.log("req", _req.query);
     const movePage = parseInt(_req.query.movePage);
     const method = movePage == 1 ? "nextPage" : movePage == -1 ? "prevPage" : "search";
-    console.log("method", method, "movePage", movePage);
     const payload = {
       actions: [{ method: method }],
       set: {
@@ -142,7 +141,6 @@ app.get("/events/upcoming", async (_req, res) => {
       },
       body: JSON.stringify(payload)
     };
-    console.log("requestOptions", requestOptions);
     const r = await fetch(url, requestOptions);
 
     // 🥐 capture & merge any cookies the endpoint sets (Cloudflare, etc.)
@@ -242,7 +240,8 @@ app.post("/map/availability/:id", async (req, res) => {
           params: {
             perfVector: [performanceId],
             reqRows: "1",
-            [`reqNum${priceTypeId}`]: String(numSeats)
+            [`reqNum::${priceTypeId}`]: String(numSeats),
+            optNum: "2"
           }
         }
       ],
@@ -275,6 +274,7 @@ app.post("/map/availability/:id", async (req, res) => {
 
     res.json(data);
   } catch (err) {
+    console.error("Error in /map/availability:", err);
     res.status(500).json({ error: String(err?.message || err) });
   }
 });
@@ -349,8 +349,12 @@ app.post("/map/pricing/:id", async (req, res) => {
     const payload = {
       actions: [
         {
-          method: "loadMap",
-          params: { performance_ids: [performanceId], promocode_access_code }
+          method: "loadBestAvailable",
+          params: { performance_ids: [performanceId] }
+        },
+        {
+          method: "loadAvailability",
+          params: { performance_ids: [performanceId] }
         }
       ],
       get: ["pricetypes"]
@@ -370,11 +374,126 @@ app.post("/map/pricing/:id", async (req, res) => {
 
     const raw = await r.text();
     let data; try { data = JSON.parse(raw); } catch { data = raw; }
-
+    const pricetypes = data?.data?.pricetypes;
     if (!r.ok) return res.status(r.status).json({ error: "loadMap(pricing) failed", details: data });
 
-    res.json(data); // pass through
+    res.json({ pricetypes });
   } catch (err) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+// Real checkout endpoint: calls AV order API with addPayment
+app.post("/checkout", express.json(), async (req, res) => {
+  try {
+    if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
+    if (!ORDER_PATH) return res.status(500).json({ error: "ORDER_PATH not configured" });
+
+    const { deliveryMethod, paymentMethod } = req.body || {};
+    const url = new URL(ORDER_PATH, API_BASE).toString();
+
+    // Step 1: addPayment
+    const payload1 = {
+      actions: [ { method: "addPayment" } ],
+      get: ["Payments"],
+      objectName: "myOrder"
+    };
+    const r1 = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload1)
+    });
+    const raw1 = await r1.text();
+    let data1; try { data1 = JSON.parse(raw1); } catch { data1 = raw1; }
+    if (!r1.ok) {
+      return res.status(r1.status).json({ error: "Checkout failed (addPayment)", details: data1 });
+    }
+
+    // Extract paymentID from Payments
+    let paymentID = null;
+    const payments = data1?.data?.Payments || {};
+    for (const [k, v] of Object.entries(payments)) {
+      if (k === "state") continue;
+      if (v?.payment_id?.standard) {
+        paymentID = v.payment_id.standard;
+        break;
+      }
+    }
+    if (!paymentID) {
+      return res.status(500).json({ error: "No paymentID found after addPayment", details: data1 });
+    }
+
+    // Step 2: set delivery and payment method
+    const payload2 = {
+      set: {
+        "Order::deliverymethod_id": deliveryMethod,
+        [`Payments::${paymentID}::active_payment`]: paymentMethod
+      },
+      get: ["Order::order_number", "Payments"],
+      objectName: "myOrder"
+    };
+    const r2 = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload2)
+    });
+    const raw2 = await r2.text();
+    let data2; try { data2 = JSON.parse(raw2); } catch { data2 = raw2; }
+    if (!r2.ok) {
+      return res.status(r2.status).json({ error: "Checkout failed (set delivery/payment)", details: data2 });
+    }
+
+    // Step 3: getPaymentClientToken
+    const payload3 = {
+      actions: [
+        {
+          method: "getPaymentClientToken",
+          params: { payment_id: paymentID }
+        }
+      ],
+      get: ["Order::order_number", "Payments"],
+      objectName: "myOrder"
+    };
+    const r3 = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload3)
+    });
+    const raw3 = await r3.text();
+    let data3; try { data3 = JSON.parse(raw3); } catch { data3 = raw3; }
+
+    // Step 4: get Payments::payment_id
+    const payload4 = {
+      get: [ `Payments::${paymentID}` ],
+      objectName: "myOrder"
+    };
+    const r4 = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload4)
+    });
+    const raw4 = await r4.text();
+    let data4; try { data4 = JSON.parse(raw4); } catch { data4 = raw4; }
+    // Return all steps for debugging
+    res.json({ payment_details: data4.data?.[`Payments::${paymentID}`] });
+  } catch (err) {
+    console.error("Error in /checkout:", err);
     res.status(500).json({ error: String(err?.message || err) });
   }
 });

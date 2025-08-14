@@ -4,6 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Event Details</title>
+  <script src="helpers.js"></script>
   <style>
     :root { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
     body { margin: 16px; background: #fafafa; }
@@ -80,53 +81,7 @@
     const params = new URLSearchParams(location.search);
     const eventId = params.get("id");
 
-    function fallbackImage(src) {
-      return src && src.trim() ? src : "av.webp";
-    }
-
-    function showError(msg) {
-      $error.style.display = "";
-      $error.textContent = msg;
-    }
-
-    function parseMoney(s) {
-      if (s == null) return NaN;
-      if (typeof s === "number") return s;
-      return parseFloat(String(s).replace(/[^\d.]/g, ""));
-    }
-    function pricingMinMax(pricingObj) {
-      if (!pricingObj || typeof pricingObj !== "object") return null;
-      const rows = Object.entries(pricingObj).filter(([k]) => k !== "state").map(([, v]) => v);
-      const amounts = [];
-      for (const row of rows) {
-        const std = row?.amounts?.standard;
-        if (Array.isArray(std)) {
-          for (const amt of std) {
-            const n = parseMoney(amt);
-            if (Number.isFinite(n)) amounts.push(n);
-          }
-        } else {
-          const n = parseMoney(std);
-          if (Number.isFinite(n)) amounts.push(n);
-        }
-      }
-      if (!amounts.length) return null;
-      return { min: Math.min(...amounts), max: Math.max(...amounts) };
-    }
-
-// Helpers to read AV fields safely (string or display[0])
-    function avText(node) {
-      if (!node) return "";
-      const v = node.display ?? node.standard ?? "";
-      return Array.isArray(v) ? (v[0] ?? "") : v;
-    }
-    function avImg(...nodes) {
-      for (const n of nodes) {
-        const src = avText(n);
-        if (src && String(src).trim()) return src;
-      }
-      return "";
-    }
+    // ...helpers.js now provides: fallbackImage, showError, parseMoney, pricingMinMax, avText, avImg...
 
     function renderEvent(ev) {
       // Title (prefer short_description if present)
@@ -195,49 +150,75 @@
       }
     }
 
-async function getBestAvailable() {
-    const n = Math.max(1, parseInt($num.value, 10) || 1);
-    const priceTypeId = $pricetype.value;
-    try {
-      const r = await fetch(`/map/availability/${encodeURIComponent(eventId)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ numSeats: n, priceTypeId })
-      });
-      if (!r.ok) throw new Error("Failed to load availability");
-      const data = await r.json();
+    async function getBestAvailable() {
+      const n = Math.max(1, parseInt($num.value, 10) || 1);
+      const priceTypeId = $pricetype.value;
+      try {
+        const r = await fetch(`/map/availability/${encodeURIComponent(eventId)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ numSeats: n, priceTypeId })
+        });
+        if (!r.ok) throw new Error("Failed to load availability");
+        const data = await r.json();
+        console.log("Best available loaded:", data);
 
-      // Store raw data for later steps (pricing/checkout wiring)
-      localStorage.setItem("availability", JSON.stringify(data?.data?.availability ?? {}));
-      localStorage.setItem("pricing", JSON.stringify(data?.data?.pricing ?? {}));
-      localStorage.setItem("pricetypes", JSON.stringify(data?.data?.pricetypes ?? {}));
-      localStorage.setItem("legends", JSON.stringify(data?.data?.legends ?? {}));
+        // Admissions (seats)
+        const admissions = data?.data?.Admissions || {};
+        const seatRows = Object.entries(admissions)
+          .filter(([k]) => k !== "state")
+          .map(([, v]) => v);
+        const pseudoSeats = seatRows.map((row) => ({
+          row: { standard: row?.row?.standard ?? "—" },
+          seat: { standard: row?.seat?.standard ?? "—" },
+          aisle: { standard: row?.aisle?.standard ?? "—" },
+          net: { display: row?.net?.display ?? "" }
+        }));
+        renderSeats(pseudoSeats);
+        $checkout.style.display = "";
 
-      // For now, render a simple summary using availability (no seat selection yet)
-      const av = data?.data?.availability ?? {};
-      const flat = Array.isArray(av) ? av : Object.values(av);
-      // Quick visualization: show up to first 5 availability entries
-      const preview = flat.slice(0, 5).map((a, i) => ({
-        section: a?.section ?? a?.name ?? `Zone ${i+1}`,
-        available: a?.available ?? a?.available_count ?? a?.seats_available ?? "—",
-        priceType: a?.price_type ?? a?.priceType ?? ""
-      }));
+        // Render Delivery Methods dropdown
+        let $delivery = document.getElementById("delivery");
+        if (!$delivery) {
+          $delivery = document.createElement("select");
+          $delivery.id = "delivery";
+          $delivery.className = "input";
+          $delivery.style.marginLeft = "10px";
+          $checkout.parentNode.insertBefore($delivery, $checkout);
+        }
+        $delivery.innerHTML = "";
+        const delivery = data?.data?.DeliveryMethodDetails || {};
+        Object.entries(delivery).forEach(([id, d]) => {
+          if (id === "state") return;
+          const opt = document.createElement("option");
+          opt.value = id;
+          opt.textContent = d?.name?.display || d?.name?.standard || id;
+          $delivery.appendChild(opt);
+        });
 
-      // Convert to "seats" UI shape temporarily so the list renders something useful
-      const pseudoSeats = preview.map((p, i) => ({
-        row: { standard: p.section },
-        seat: { standard: p.available },
-        aisle: { standard: p.priceType || "-" },
-        net: { display: "" }
-      }));
-
-      renderSeats(pseudoSeats);
-      $checkout.style.display = ""; // keep showing checkout; we’ll wire it next
-    } catch (e) {
-      console.error(e);
-      showError("Couldn't load availability. Please try again.");
+        // Render Payment Methods dropdown
+        let $payment = document.getElementById("payment");
+        if (!$payment) {
+          $payment = document.createElement("select");
+          $payment.id = "payment";
+          $payment.className = "input";
+          $payment.style.marginLeft = "10px";
+          $delivery.parentNode.insertBefore($payment, $delivery.nextSibling);
+        }
+        $payment.innerHTML = "";
+        const payment = data?.data?.AvailablePaymentMethods || {};
+        Object.entries(payment).forEach(([id, p]) => {
+          if (id === "state") return;
+          const opt = document.createElement("option");
+          opt.value = id;
+          opt.textContent = p?.name?.display || p?.name?.standard || id;
+          $payment.appendChild(opt);
+        });
+      } catch (e) {
+        console.error(e);
+        showError("Couldn't load availability. Please try again.");
+      }
     }
-  }
 
     // Fetch price types from /map/pricing/:id and populate dropdown
     async function populatePriceTypes() {
@@ -252,15 +233,16 @@ async function getBestAvailable() {
         });
         if (!r.ok) throw new Error("Failed to load price types");
         const data = await r.json();
-        const pricetypes = data?.data?.pricetypes;
+        console.log("Price types loaded:", data);
+        const pricetypes = data.pricetypes;
         if (pricetypes && typeof pricetypes === "object") {
           Object.entries(pricetypes).forEach(([id, pt]) => {
             if (id === "state") return;
-            const name = pt?.name?.display || pt?.name?.standard || id;
-            const opt = document.createElement("option");
-            opt.value = id;
-            opt.textContent = name;
-            $pricetype.appendChild(opt);
+                const name = pt?.name?.display || pt?.name?.standard || id;
+                const opt = document.createElement("option");
+                opt.value = id;
+                opt.textContent = name;
+                $pricetype.appendChild(opt);
           });
         }
         $pricetype_value.value = $pricetype.value || "";
@@ -274,6 +256,26 @@ async function getBestAvailable() {
     });
 
     $best.addEventListener("click", getBestAvailable);
+
+    // Mock checkout handler
+
+    $checkout.addEventListener("click", function(e) {
+      e.preventDefault();
+      const $delivery = document.getElementById("delivery");
+      const $payment = document.getElementById("payment");
+      const deliveryMethod = $delivery ? $delivery.value : null;
+      const paymentMethod = $payment ? $payment.value : null;
+      if (!deliveryMethod || !paymentMethod) {
+        showError("Please select a delivery and payment method.");
+        return;
+      }
+      // Save to localStorage for checkout.html to read
+      localStorage.setItem('deliveryMethod', deliveryMethod);
+      localStorage.setItem('paymentMethod', paymentMethod);
+      localStorage.setItem('eventId', eventId);
+      window.location.href = "checkout.html";
+    });
+
     loadEvent();
     renderSeats([]); // initial
     populatePriceTypes();

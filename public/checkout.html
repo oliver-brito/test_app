@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Checkout (Mock)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #fafafa; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 32px; }
+    h1 { font-size: 2rem; margin-bottom: 24px; }
+    .summary { margin-bottom: 24px; }
+    .label { font-weight: 600; }
+    .value { margin-left: 8px; }
+    .success { color: #16a34a; font-weight: 600; }
+    .error { color: #b91c1c; font-weight: 600; }
+    .back { display: inline-block; margin-top: 24px; color: #2563eb; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Checkout</h1>
+    <div id="result" class="summary">Loading…</div>
+    <form id="cardForm" style="display:none; margin-top:20px;">
+      <div class="controls" style="display: flex; flex-direction: column; gap: 12px;">
+        <label>Card Number:
+          <input class="input" type="text" name="cardNumber" required maxlength="19" autocomplete="cc-number">
+        </label>
+        <label>Expiration:
+          <input class="input" type="text" name="exp" required maxlength="7" placeholder="MM/YY" autocomplete="cc-exp">
+        </label>
+        <label>CVV:
+          <input class="input" type="text" name="cvv" required maxlength="4" autocomplete="cc-csc">
+        </label>
+        <label>Cardholder Name:
+          <input class="input" type="text" name="cardholder" required autocomplete="cc-name">
+        </label>
+        <button type="submit" class="btn">Submit Payment</button>
+      </div>
+    </form>
+    <a href="index.html" class="back">&larr; Back to events</a>
+  </div>
+  <script>
+    async function doCheckout() {
+      const deliveryMethod = localStorage.getItem('deliveryMethod') || '';
+      const paymentMethod = localStorage.getItem('paymentMethod') || '';
+      const eventId = localStorage.getItem('eventId') || '';
+      const resultDiv = document.getElementById('result');
+      try {
+        const r = await fetch('/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventId, deliveryMethod, paymentMethod })
+        });
+        const data = await r.json();
+        const payment_details = data.payment_details || {};
+        console.log(payment_details);
+        const pa_request_url = payment_details.pa_request_URL?.standard || '';
+        const conversationToken = payment_details.server_to_client_token?.standard || '';
+
+        resultDiv.innerHTML = `
+          <div class="label">Event ID:</div><div class="value">${eventId}</div>
+          <div class="label">Delivery Method:</div><div class="value">${deliveryMethod}</div>
+          <div class="label">Payment Method:</div><div class="value">${paymentMethod}</div>
+          <div class="label">PA Request URL:</div><div class="value"><a href="${pa_request_url}" target="_blank">${pa_request_url}</a></div>
+          <div class="label">Conversation Token:</div><div class="value">${conversationToken}</div>
+          <form id="payment-form" method="post" action="process_payment" style="margin-top:24px;">
+            <h3>Payment Details</h3>
+            <label for="card-number">Card Number</label>
+            <div id="card-number" class="hosted-field"></div>
+            <label for="card-expiration">Expiry Date</label>
+            <div id="card-expiration" class="hosted-field"></div>
+            <label for="card-cvv">Security Code</label>
+            <div id="card-cvv" class="hosted-field"></div>
+            <label for="card-holder-name">Cardholder Name</label>
+            <div id="card-holder-name" class="hosted-field"></div>
+            <button id="btn-script" type="button">Submit</button>
+          </form>
+        `;
+        // Log for debugging
+        console.log('pa_request_url:', pa_request_url);
+        console.log('conversationToken:', conversationToken);
+
+        // Dynamically inject the AudienceView SDK script using pa_request_url as base (protocol + host only)
+        if (pa_request_url) {
+          try {
+            const urlObj = new URL(pa_request_url);
+            const sdkUrl = urlObj.origin + '/ui/hosted-field-sdk/sdk.js';
+            const script = document.createElement('script');
+            script.src = sdkUrl;
+            script.defer = true;
+            script.onload = function() {
+              // Wait for the SDK to load, then initialize fields
+              if (!conversationToken) {
+                resultDiv.innerHTML += `<div class="error">No valid conversation token received. Hosted fields cannot be initialized.</div>`;
+                console.error('No valid conversation token received.');
+                return;
+              }
+              if (typeof AvHostedInputSDK !== 'undefined') {
+                const styles = `input{color: #333; border: none; outline: none;} .container.valid input{ color: green} .container.invalid input{ color: red}`;
+                function statusUpdate(event) {
+                  if (!event.valid) {
+                    console.log(`Errors: ${JSON.stringify(event.validationsErrors)}`);
+                  }
+                  if (AvHostedInputSDK.getGroup().valid) {
+                    console.log('All fields in the group are valid');
+                  } else {
+                    console.error(`Some input is invalid and can't be confirmed`);
+                  }
+                }
+                AvHostedInputSDK.initInput({
+                  Conversation_token: conversationToken,
+                  containerSelector: '#card-cvv',
+                  name: 'test-card-cvv',
+                  type: 'CVV',
+                  styles: styles,
+                }).onValidationStatusChanged = statusUpdate;
+                AvHostedInputSDK.initInput({
+                  Conversation_token: conversationToken,
+                  containerSelector: '#card-expiration',
+                  name: 'test-card-expiration',
+                  type: 'EXP_DATE',
+                  styles: styles,
+                  placeholder: 'MMYY'
+                }).onValidationStatusChanged = statusUpdate;
+                AvHostedInputSDK.initInput({
+                  Conversation_token: conversationToken,
+                  containerSelector: '#card-number',
+                  name: 'test-card-number',
+                  type: 'PAN',
+                  styles: styles,
+                  placeholder: 'Enter card number',
+                }).onValidationStatusChanged = statusUpdate;
+                AvHostedInputSDK.initInput({
+                  Conversation_token: conversationToken,
+                  containerSelector: '#card-holder-name',
+                  name: 'test-card-holder-name',
+                  type: 'CARDHOLDER_NAME',
+                  styles: styles,
+                  placeholder: 'Enter cardholder name',
+                }).onValidationStatusChanged = statusUpdate;
+                document.querySelector('#btn-script').addEventListener('click', () => {
+                  alert('Mock submit: payment details would be submitted.');
+                });
+                AvHostedInputSDK.getGroup().ready.then(ok => {
+                  console.log('Group is ready');
+                }, errors => {
+                  console.error('Group failed: ' + JSON.stringify(errors));
+                });
+              }
+            };
+            document.body.appendChild(script);
+          } catch (e) {
+            console.error('Invalid pa_request_url:', pa_request_url, e);
+          }
+        }
+      } catch (err) {
+        resultDiv.innerHTML = `<div class="error">Checkout failed: ${err.message}</div>`;
+      }
+    }
+    doCheckout();
+  </script>
+</body>
+</html>
