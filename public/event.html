@@ -269,10 +269,18 @@
         showError("Please select a delivery and payment method.");
         return;
       }
+      
+      // Get event information for the order
+      const eventName = document.getElementById("title").textContent || "Unknown Event";
+      const eventDate = document.getElementById("start").textContent || "TBD";
+      
       // Save to localStorage for checkout.html to read
       localStorage.setItem('deliveryMethod', deliveryMethod);
       localStorage.setItem('paymentMethod', paymentMethod);
       localStorage.setItem('eventId', eventId);
+      localStorage.setItem('eventName', eventName);
+      localStorage.setItem('eventDate', eventDate);
+      
       window.location.href = "checkout.html";
     });
 

@@ -4,6 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Checkout (Mock)</title>
+  <script src="hostedFields.js"></script>
   <style>
     body { font-family: system-ui, sans-serif; background: #fafafa; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 32px; }
@@ -14,6 +15,55 @@
     .success { color: #16a34a; font-weight: 600; }
     .error { color: #b91c1c; font-weight: 600; }
     .back { display: inline-block; margin-top: 24px; color: #2563eb; text-decoration: none; }
+    
+    /* Form styling */
+    form label { 
+      display: block; 
+      font-weight: 600; 
+      margin-top: 16px; 
+      margin-bottom: 6px;
+      color: #374151;
+      font-size: 14px;
+    }
+    
+    .hosted-field { 
+      border: 1px solid #d1d5db; 
+      border-radius: 6px; 
+      padding: 12px; 
+      background: #fff;
+      min-height: 20px;
+      width: 100%;
+      box-sizing: border-box;
+      transition: border-color 0.15s ease-in-out;
+    }
+    
+    .hosted-field:focus-within {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    
+    .btn { 
+      background: #3b82f6; 
+      color: white; 
+      border: none; 
+      padding: 12px 24px; 
+      border-radius: 6px; 
+      cursor: pointer; 
+      font-weight: 600;
+      font-size: 16px;
+      margin-top: 24px;
+      width: 100%;
+      transition: background-color 0.15s ease-in-out;
+    }
+    
+    .btn:hover { 
+      background: #2563eb; 
+    }
+    
+    .btn:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
@@ -65,99 +115,209 @@
           <div class="label">Conversation Token:</div><div class="value">${conversationToken}</div>
           <form id="payment-form" method="post" action="process_payment" style="margin-top:24px;">
             <h3>Payment Details</h3>
-            <label for="card-number">Card Number</label>
-            <div id="card-number" class="hosted-field"></div>
-            <label for="card-expiration">Expiry Date</label>
-            <div id="card-expiration" class="hosted-field"></div>
-            <label for="card-cvv">Security Code</label>
-            <div id="card-cvv" class="hosted-field"></div>
-            <label for="card-holder-name">Cardholder Name</label>
-            <div id="card-holder-name" class="hosted-field"></div>
-            <button id="btn-script" type="button">Submit</button>
+            
+            <label for="account_number-container">Account Number:</label>
+            <div id="account_number-container" class="hosted-field"></div>
+            
+            <label for="cvv-container">CVV:</label>
+            <div id="cvv-container" class="hosted-field"></div>
+            
+            <label for="exp_date-container">Expiration Date:</label>
+            <div id="exp_date-container" class="hosted-field"></div>
+            
+            <label for="cardholder_name-container">Cardholder Name:</label>
+            <input id="cardholder_name-container" class="hosted-field" type="text" name="cardholder_name" required placeholder="Cardholder Name" autocomplete="cc-name">
+
+            <button type="submit" class="btn" id="submit-button" onClick="handleSubmit(event)">Submit Payment</button>
           </form>
         `;
         // Log for debugging
         console.log('pa_request_url:', pa_request_url);
         console.log('conversationToken:', conversationToken);
 
-        // Dynamically inject the AudienceView SDK script using pa_request_url as base (protocol + host only)
-        if (pa_request_url) {
-          try {
-            const urlObj = new URL(pa_request_url);
-            const sdkUrl = urlObj.origin + '/ui/hosted-field-sdk/sdk.js';
-            const script = document.createElement('script');
-            script.src = sdkUrl;
-            script.defer = true;
-            script.onload = function() {
-              // Wait for the SDK to load, then initialize fields
-              if (!conversationToken) {
-                resultDiv.innerHTML += `<div class="error">No valid conversation token received. Hosted fields cannot be initialized.</div>`;
-                console.error('No valid conversation token received.');
-                return;
+        // Initialize hosted fields using the new module
+        if (window.HostedFieldsManager) {
+          const hostedFieldsManager = new window.HostedFieldsManager();
+          
+          // Store globally so handleSubmit can access it
+          window.currentHostedFieldsManager = hostedFieldsManager;
+          
+          hostedFieldsManager.initializeHostedFields({
+            conversationToken: conversationToken,
+            paRequestUrl: pa_request_url,
+            resultContainer: resultDiv,
+            onStatusUpdate: (fieldName, status, allStatuses) => {
+              console.log(`Field ${fieldName} status:`, status);
+              console.log('All field statuses:', allStatuses);
+              
+              // Also log when all fields become valid
+              const allValid = Object.values(allStatuses).every(s => s && s.isValid);
+              if (allValid) {
+                console.log('🎉 All payment fields are now valid!');
               }
-              if (typeof AvHostedInputSDK !== 'undefined') {
-                const styles = `input{color: #333; border: none; outline: none;} .container.valid input{ color: green} .container.invalid input{ color: red}`;
-                function statusUpdate(event) {
-                  if (!event.valid) {
-                    console.log(`Errors: ${JSON.stringify(event.validationsErrors)}`);
-                  }
-                  if (AvHostedInputSDK.getGroup().valid) {
-                    console.log('All fields in the group are valid');
-                  } else {
-                    console.error(`Some input is invalid and can't be confirmed`);
-                  }
-                }
-                AvHostedInputSDK.initInput({
-                  Conversation_token: conversationToken,
-                  containerSelector: '#card-cvv',
-                  name: 'test-card-cvv',
-                  type: 'CVV',
-                  styles: styles,
-                }).onValidationStatusChanged = statusUpdate;
-                AvHostedInputSDK.initInput({
-                  Conversation_token: conversationToken,
-                  containerSelector: '#card-expiration',
-                  name: 'test-card-expiration',
-                  type: 'EXP_DATE',
-                  styles: styles,
-                  placeholder: 'MMYY'
-                }).onValidationStatusChanged = statusUpdate;
-                AvHostedInputSDK.initInput({
-                  Conversation_token: conversationToken,
-                  containerSelector: '#card-number',
-                  name: 'test-card-number',
-                  type: 'PAN',
-                  styles: styles,
-                  placeholder: 'Enter card number',
-                }).onValidationStatusChanged = statusUpdate;
-                AvHostedInputSDK.initInput({
-                  Conversation_token: conversationToken,
-                  containerSelector: '#card-holder-name',
-                  name: 'test-card-holder-name',
-                  type: 'CARDHOLDER_NAME',
-                  styles: styles,
-                  placeholder: 'Enter cardholder name',
-                }).onValidationStatusChanged = statusUpdate;
-                document.querySelector('#btn-script').addEventListener('click', () => {
-                  alert('Mock submit: payment details would be submitted.');
-                });
-                AvHostedInputSDK.getGroup().ready.then(ok => {
-                  console.log('Group is ready');
-                }, errors => {
-                  console.error('Group failed: ' + JSON.stringify(errors));
-                });
-              }
-            };
-            document.body.appendChild(script);
-          } catch (e) {
-            console.error('Invalid pa_request_url:', pa_request_url, e);
-          }
+            },
+            onError: (error) => {
+              console.error('Hosted fields error:', error);
+              // Could show fallback form here if needed
+            }
+          });
+        } else {
+          resultDiv.innerHTML += `<div class="error">Hosted fields module not loaded. Please refresh the page.</div>`;
         }
       } catch (err) {
         resultDiv.innerHTML = `<div class="error">Checkout failed: ${err.message}</div>`;
       }
     }
+    
     doCheckout();
+
+    function handleSubmit(event) {
+      event.preventDefault();
+      
+      const submitButton = document.getElementById('submit-button');
+      const resultDiv = document.getElementById('result');
+      
+      console.log('=== SUBMIT FUNCTION STARTED ===');
+      console.log('AvHostedInputSDK available:', typeof AvHostedInputSDK !== 'undefined');
+      console.log('AvHostedInputSDK object:', AvHostedInputSDK);
+      
+      // Disable submit button to prevent double submission
+      submitButton.disabled = true;
+      submitButton.textContent = 'Processing...';
+      
+      // Check if AvHostedInputSDK is available
+      if (typeof AvHostedInputSDK === 'undefined') {
+        console.error('AvHostedInputSDK is undefined');
+        showError('Payment system not loaded. Please refresh the page and try again.');
+        return;
+      }
+
+      // Check if submitGroup method exists
+      if (typeof AvHostedInputSDK.submitGroup !== 'function') {
+        console.error('AvHostedInputSDK.submitGroup is not a function:', typeof AvHostedInputSDK.submitGroup);
+        showError('Payment submission method not available. Please refresh the page.');
+        return;
+      }
+
+      console.log('About to call AvHostedInputSDK.submitGroup()...');
+      
+      // Try calling submitGroup with more detailed error handling
+      try {
+        const submitPromise = AvHostedInputSDK.submitGroup();
+        console.log('submitGroup() called, returned:', submitPromise);
+        console.log('Is it a Promise?', submitPromise instanceof Promise);
+        
+        if (submitPromise && typeof submitPromise.then === 'function') {
+          // It's a Promise
+          submitPromise.then(async (paymentData) => {
+            console.log('=== AvHostedInputSDK.submitGroup() Promise Resolved ===');
+            console.log('Full response:', paymentData);
+            console.log('Response type:', typeof paymentData);
+            console.log('Response constructor:', paymentData ? paymentData.constructor.name : 'null/undefined');
+            console.log('Response keys:', paymentData ? Object.keys(paymentData) : 'null/undefined');
+            
+            try {
+              console.log('JSON stringified:', JSON.stringify(paymentData, null, 2));
+            } catch (e) {
+              console.log('Could not stringify response:', e.message);
+            }
+            console.log('=== End AvHostedInputSDK Response ===');
+            
+            await processTransaction(paymentData);
+            
+          }).catch((error) => {
+            console.error('=== AvHostedInputSDK.submitGroup() Promise Rejected ===');
+            console.error('Error:', error);
+            console.error('Error type:', typeof error);
+            console.error('Error message:', error.message);
+            console.error('Error stack:', error.stack);
+            showError(`Payment submission failed: ${error.message}`);
+          });
+        } else {
+          // It's not a Promise, handle synchronously
+          console.log('submitGroup() returned synchronously:', submitPromise);
+          processTransaction(submitPromise);
+        }
+      } catch (syncError) {
+        console.error('=== Synchronous Error in submitGroup() ===');
+        console.error('Error:', syncError);
+        console.error('Error message:', syncError.message);
+        showError(`Payment submission error: ${syncError.message}`);
+      }
+      
+      async function processTransaction(paymentData) {
+        try {
+          console.log('=== PROCESSING TRANSACTION ===');
+          console.log('Payment data to send:', paymentData);
+          
+          // Call the transaction endpoint
+          const transactionResponse = await fetch('/transaction', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              paymentData: paymentData,
+              orderData: {
+                eventId: localStorage.getItem('eventId'),
+                deliveryMethod: localStorage.getItem('deliveryMethod'),
+                paymentMethod: localStorage.getItem('paymentMethod'),
+                eventName: localStorage.getItem('eventName'),
+                eventDate: localStorage.getItem('eventDate')
+              }
+            })
+          });
+
+          console.log('Transaction response status:', transactionResponse.status);
+          const transactionResult = await transactionResponse.json();
+          console.log('Transaction result:', transactionResult);
+          
+          if (transactionResult.success && transactionResult.redirectUrl) {
+            // Show success message briefly before redirect
+            showSuccess('Payment processed successfully! Redirecting to confirmation...');
+            
+            // Redirect to order confirmation page
+            setTimeout(() => {
+              window.location.href = transactionResult.redirectUrl;
+            }, 1500);
+            
+          } else {
+            throw new Error(transactionResult.error || 'Transaction failed');
+          }
+          
+        } catch (error) {
+          console.error('Transaction error:', error);
+          showError(`Transaction failed: ${error.message}`);
+        }
+      }
+      
+      function showError(message) {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Submit Payment';
+        
+        // Remove any existing error messages
+        const existingErrors = resultDiv.querySelectorAll('.payment-error');
+        existingErrors.forEach(error => error.remove());
+        
+        // Add new error message
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error payment-error';
+        errorDiv.style.marginTop = '16px';
+        errorDiv.textContent = message;
+        resultDiv.appendChild(errorDiv);
+      }
+      
+      function showSuccess(message) {
+        // Remove any existing messages
+        const existingMessages = resultDiv.querySelectorAll('.payment-error, .payment-success');
+        existingMessages.forEach(msg => msg.remove());
+        
+        // Add success message
+        const successDiv = document.createElement('div');
+        successDiv.className = 'success payment-success';
+        successDiv.style.marginTop = '16px';
+        successDiv.textContent = message;
+        resultDiv.appendChild(successDiv);
+      }
+    }
   </script>
 </body>
 </html>

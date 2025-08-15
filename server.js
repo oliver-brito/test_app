@@ -1,10 +1,47 @@
 
 import express from "express";
 import dotenv from "dotenv";
+// --- HTTPS support (add this near the top of server.js) ---
+import fs from "fs";
+import https from "https";
+// -----------------------------------------------------------
+
 dotenv.config();
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
+
+// Add security headers including CSP
+app.use((req, res, next) => {
+  // Allow frames from any origin for hosted payment fields
+  res.setHeader('Content-Security-Policy', 
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline' https: http:; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: https: http:; " +
+    "connect-src 'self' https: http:; " +
+    "frame-src 'self' https: http:; " +
+    "frame-ancestors 'self' https: http:; " +
+    "child-src 'self' https: http:;"
+  );
+  
+  // Additional security headers
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  
+  next();
+});
+
+// Redirige a HTTPS si llega por HTTP
+app.use((req, res, next) => {
+  // respeta herramientas locales/health checks
+  if (req.secure || req.headers["x-forwarded-proto"] === "https") return next();
+  const httpsPort = process.env.HTTPS_PORT || 3443;
+  const host = (req.headers.host || "").replace(/:\d+$/, `:${httpsPort}`);
+  return res.redirect(`https://${host}${req.originalUrl}`);
+});
+
 app.use(express.static("public"));
 
 const { API_BASE, AUTH_PATH, UNL_USER, UNL_PASSWORD, UPCOMING_PATH, MAP_PATH, PERFORMANCE_PATH, ORDER_PATH } = process.env;
@@ -218,10 +255,6 @@ app.post("/proxy", async (req, res) => {
   }
 });
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`Demo UI at http://localhost:${port}`));
-
-
 // POST /map/availability/:performanceId  -> calls AV map.loadAvailability
 app.post("/map/availability/:id", async (req, res) => {
   try {
@@ -383,6 +416,172 @@ app.post("/map/pricing/:id", async (req, res) => {
   }
 });
 
+// POST /transaction -> Process payment transaction via AudienceView API
+app.post("/transaction", express.json(), async (req, res) => {
+  try {
+    if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
+    if (!ORDER_PATH) return res.status(500).json({ error: "ORDER_PATH not configured" });
+
+    const { paymentData, orderData } = req.body || {};
+    console.log('Processing transaction with data:', { paymentData, orderData });
+
+    const url = new URL(ORDER_PATH, API_BASE).toString();
+    
+    // Call AudienceView order insert API
+    const payload = {
+      actions: [
+        {
+          method: "insert",
+          params: {
+            notification: "correspondence"
+          },
+          acceptWarnings: [
+            5008,
+            4224,
+            5388
+          ]
+        }
+      ],
+      get: ["Order::order_number", "Payments"],
+      objectName: "myOrder"
+    };
+
+    console.log('Calling AudienceView order insert with payload:', payload);
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const responseText = await response.text();
+    console.log('AudienceView response status:', response.status);
+    console.log('AudienceView response text:', responseText);
+
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (e) {
+      responseData = responseText;
+    }
+
+    if (!response.ok) {
+      console.error('AudienceView API error:', responseData);
+      return res.status(response.status).json({
+        success: false,
+        error: "Transaction failed",
+        details: responseData
+      });
+    }
+
+    // Extract order information from response
+    const orderNumber = responseData?.data?.["Order::order_number"]?.standard;
+    const payments = responseData?.data?.Payments || {};
+    
+    console.log('Transaction completed successfully');
+    console.log('Order number:', orderNumber);
+    console.log('Payments:', payments);
+
+    // Generate mock transaction ID for display purposes
+    const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    
+    // Redirect to success page with transaction details
+    res.json({
+      success: true,
+      redirectUrl: `/viewOrder.html?orderId=${orderNumber || transactionId}&transactionId=${transactionId}`,
+      transactionDetails: {
+        success: true,
+        transactionId: transactionId,
+        orderId: orderNumber || transactionId,
+        timestamp: new Date().toISOString(),
+        paymentMethod: orderData?.paymentMethod || "Credit Card",
+        status: "completed",
+        audienceViewResponse: responseData
+      }
+    });
+
+  } catch (err) {
+    console.error("Error in /transaction:", err);
+    res.status(500).json({ 
+      success: false,
+      error: String(err?.message || err) 
+    });
+  }
+});
+
+// GET /order -> Retrieve order details from AudienceView
+app.get("/order", async (req, res) => {
+  try {
+    if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
+    if (!ORDER_PATH) return res.status(500).json({ error: "ORDER_PATH not configured" });
+
+    const url = new URL(ORDER_PATH, API_BASE).toString();
+    
+    const payload = {
+      get: ["Order"],
+      objectName: "myOrder"
+    };
+
+    console.log('Fetching order details with payload:', payload);
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const setCookie = response.headers.get("set-cookie");
+    if (setCookie) {
+      const pairs = parseSetCookieHeader(setCookie);
+      CURRENT_COOKIES = mergeCookiePairs(CURRENT_COOKIES, pairs);
+    }
+
+    const responseText = await response.text();
+    console.log('Order details response status:', response.status);
+    console.log('Order details response text:', responseText);
+
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (e) {
+      responseData = responseText;
+    }
+
+    if (!response.ok) {
+      console.error('AudienceView API error:', responseData);
+      return res.status(response.status).json({
+        error: "Failed to fetch order details",
+        details: responseData
+      });
+    }
+
+    // Extract order information from response
+    const orderData = responseData?.data?.Order || {};
+    
+    console.log('Order details fetched successfully:', orderData);
+
+    res.json({
+      success: true,
+      order: orderData,
+      rawResponse: responseData
+    });
+
+  } catch (err) {
+    console.error("Error in /order:", err);
+    res.status(500).json({ 
+      error: String(err?.message || err) 
+    });
+  }
+});
+
 // Real checkout endpoint: calls AV order API with addPayment
 app.post("/checkout", express.json(), async (req, res) => {
   try {
@@ -427,6 +626,40 @@ app.post("/checkout", express.json(), async (req, res) => {
       return res.status(500).json({ error: "No paymentID found after addPayment", details: data1 });
     }
 
+    // Step 1.5: addCustomer
+    const payload1_5 = {
+      actions: [
+        {
+          method: "addCustomer",
+          params: {
+            "Customer::customer_number": "1"
+          }
+        }
+      ],
+      get: ["Order::order_number", "Payments"],
+      objectName: "myOrder"
+    };
+    
+    console.log('Adding customer to order:', payload1_5);
+    const r1_5 = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload1_5)
+    });
+    const raw1_5 = await r1_5.text();
+    let data1_5; try { data1_5 = JSON.parse(raw1_5); } catch { data1_5 = raw1_5; }
+    
+    console.log('addCustomer response status:', r1_5.status);
+    console.log('addCustomer response:', data1_5);
+    
+    if (!r1_5.ok) {
+      return res.status(r1_5.status).json({ error: "Checkout failed (addCustomer)", details: data1_5 });
+    }
+
     // Step 2: set delivery and payment method
     const payload2 = {
       set: {
@@ -436,6 +669,8 @@ app.post("/checkout", express.json(), async (req, res) => {
       get: ["Order::order_number", "Payments"],
       objectName: "myOrder"
     };
+
+    console.log('Setting delivery and payment method:', payload2.set);
     const r2 = await fetch(url, {
       method: "POST",
       headers: {
@@ -456,7 +691,10 @@ app.post("/checkout", express.json(), async (req, res) => {
       actions: [
         {
           method: "getPaymentClientToken",
-          params: { payment_id: paymentID }
+          params: { 
+            payment_id: paymentID,
+            pa_response_URL: "https://localhost:3443/checkout.html"
+          }
         }
       ],
       get: ["Order::order_number", "Payments"],
@@ -473,7 +711,8 @@ app.post("/checkout", express.json(), async (req, res) => {
     });
     const raw3 = await r3.text();
     let data3; try { data3 = JSON.parse(raw3); } catch { data3 = raw3; }
-
+    const csp3 = r3.headers.get("content-security-policy");
+    console.log(raw3);
     // Step 4: get Payments::payment_id
     const payload4 = {
       get: [ `Payments::${paymentID}` ],
@@ -497,3 +736,27 @@ app.post("/checkout", express.json(), async (req, res) => {
     res.status(500).json({ error: String(err?.message || err) });
   }
 });
+
+// --- Arranque HTTP + HTTPS ---
+const httpPort  = process.env.PORT || 3000;
+const httpsPort = process.env.HTTPS_PORT || 3443;
+const httpsKey  = process.env.HTTPS_KEY;
+const httpsCert = process.env.HTTPS_CERT;
+
+// Arranca HTTP (útil para redirección o compatibilidad)
+app.listen(httpPort, () => {
+  console.log(`HTTP  listening at  http://localhost:${httpPort}`);
+});
+
+// Arranca HTTPS si hay certs configurados
+if (httpsKey && httpsCert && fs.existsSync(httpsKey) && fs.existsSync(httpsCert)) {
+  const credentials = {
+    key:  fs.readFileSync(httpsKey),
+    cert: fs.readFileSync(httpsCert),
+  };
+  https.createServer(credentials, app).listen(httpsPort, () => {
+    console.log(`HTTPS listening at https://localhost:${httpsPort}`);
+  });
+} else {
+  console.warn("HTTPS not started (missing HTTPS_KEY/HTTPS_CERT or files).");
+}
