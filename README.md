@@ -33,3 +33,5 @@ npm start
 ```
 
 go to the **https** localhost running.
+
+Note: Use event 01, configure it to have Adyen CC and select that payment method and pick up later.
