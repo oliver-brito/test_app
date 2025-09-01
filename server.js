@@ -422,11 +422,14 @@ app.post("/transaction", express.json(), async (req, res) => {
     if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
     if (!ORDER_PATH) return res.status(500).json({ error: "ORDER_PATH not configured" });
 
-    const { paymentData, orderData } = req.body || {};
-    console.log('Processing transaction with data:', { paymentData, orderData });
+    const { paymentData, orderData, paymentID } = req.body || {};
+    console.log('Processing transaction with data:', { paymentData, orderData, paymentID });
 
     const url = new URL(ORDER_PATH, API_BASE).toString();
-    
+
+    // Use paymentID from request if provided, else default to "hola"
+    const usedPaymentID = paymentID || "hola";
+
     // Call AudienceView order insert API
     const payload = {
       actions: [
@@ -593,7 +596,10 @@ app.post("/checkout", express.json(), async (req, res) => {
 
     // Step 1: addPayment
     const payload1 = {
-      actions: [ { method: "addPayment" } ],
+      actions: [ 
+        { 
+          method: "addPayment"
+        } ],
       get: ["Payments"],
       objectName: "myOrder"
     };
@@ -632,7 +638,7 @@ app.post("/checkout", express.json(), async (req, res) => {
         {
           method: "addCustomer",
           params: {
-            "Customer::customer_number": "1"
+            "Customer::customer_number": "194532"
           }
         }
       ],
@@ -655,7 +661,7 @@ app.post("/checkout", express.json(), async (req, res) => {
     
     console.log('addCustomer response status:', r1_5.status);
     console.log('addCustomer response:', data1_5);
-    
+
     if (!r1_5.ok) {
       return res.status(r1_5.status).json({ error: "Checkout failed (addCustomer)", details: data1_5 });
     }
@@ -664,7 +670,9 @@ app.post("/checkout", express.json(), async (req, res) => {
     const payload2 = {
       set: {
         "Order::deliverymethod_id": deliveryMethod,
-        [`Payments::${paymentID}::active_payment`]: paymentMethod
+        [`Payments::${paymentID}::active_payment`]: paymentMethod,
+        [`Payments::${paymentID}::swipe_indicator`]: "Internet",
+        [`Payments::${paymentID}::cardholder_name`]: "Oliver Brito"
       },
       get: ["Order::order_number", "Payments"],
       objectName: "myOrder"

@@ -82,7 +82,7 @@
           <input class="input" type="text" name="cvv" required maxlength="4" autocomplete="cc-csc">
         </label>
         <label>Cardholder Name:
-          <input class="input" type="text" name="cardholder" required autocomplete="cc-name">
+          <input class="input" type="text" name="Payments::" required autocomplete="cc-name">
         </label>
         <button type="submit" class="btn">Submit Payment</button>
       </div>
@@ -106,6 +106,8 @@
         console.log(payment_details);
         const pa_request_url = payment_details.pa_request_URL?.standard || '';
         const conversationToken = payment_details.server_to_client_token?.standard || '';
+  const paymentID = payment_details.payment_id?.standard || '';
+  window.paymentID = paymentID;
 
         resultDiv.innerHTML = `
           <div class="label">Event ID:</div><div class="value">${eventId}</div>
@@ -124,10 +126,19 @@
             
             <label for="exp_date-container">Expiration Date:</label>
             <div id="exp_date-container" class="hosted-field"></div>
-            
-            <label for="cardholder_name-container">Cardholder Name:</label>
-            <input id="cardholder_name-container" class="hosted-field" type="text" name="cardholder_name" required placeholder="Cardholder Name" autocomplete="cc-name">
 
+            <label for="cardholder_name-container">Cardholder Name:</label>
+            <input 
+            type="text" 
+            name="BOset::BOorder::Payments::${paymentID}::cardholder_name" 
+            maxlength="100" 
+            class="input form-control" 
+            value="" 
+            title="Cardholder Name" 
+            id="BOset::BOorder::Payments::${paymentID}::cardholder_name" 
+            required 
+            autocomplete="cc-name">
+            
             <button type="submit" class="btn" id="submit-button" onClick="handleSubmit(event)">Submit Payment</button>
           </form>
         `;
@@ -203,6 +214,7 @@
       
       // Try calling submitGroup with more detailed error handling
       try {
+        const paymentID = window.paymentID || '';
         const submitPromise = AvHostedInputSDK.submitGroup();
         console.log('submitGroup() called, returned:', submitPromise);
         console.log('Is it a Promise?', submitPromise instanceof Promise);
@@ -223,7 +235,7 @@
             }
             console.log('=== End AvHostedInputSDK Response ===');
             
-            await processTransaction(paymentData);
+            await processTransaction(paymentData, paymentID);
             
           }).catch((error) => {
             console.error('=== AvHostedInputSDK.submitGroup() Promise Rejected ===');
@@ -236,7 +248,7 @@
         } else {
           // It's not a Promise, handle synchronously
           console.log('submitGroup() returned synchronously:', submitPromise);
-          processTransaction(submitPromise);
+          processTransaction(submitPromise, paymentID);
         }
       } catch (syncError) {
         console.error('=== Synchronous Error in submitGroup() ===');
@@ -245,7 +257,7 @@
         showError(`Payment submission error: ${syncError.message}`);
       }
       
-      async function processTransaction(paymentData) {
+  async function processTransaction(paymentData, paymentID) {
         try {
           console.log('=== PROCESSING TRANSACTION ===');
           console.log('Payment data to send:', paymentData);
@@ -256,6 +268,7 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               paymentData: paymentData,
+              paymentID: paymentID,
               orderData: {
                 eventId: localStorage.getItem('eventId'),
                 deliveryMethod: localStorage.getItem('deliveryMethod'),
