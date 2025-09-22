@@ -440,6 +440,7 @@ app.post("/transaction", express.json(), async (req, res) => {
       objectName: "myOrder"
     };
 
+
     console.log('Calling AudienceView order insert with payload:', payload);
 
     const response = await fetch(url, {
@@ -453,7 +454,7 @@ app.post("/transaction", express.json(), async (req, res) => {
     });
 
     const responseText = await response.text();
-    console.log('AudienceView response status:', response.status);
+    // console.log('AudienceView response status:', response.status);
     console.log('AudienceView response text:', responseText);
 
     let responseData;
@@ -476,9 +477,9 @@ app.post("/transaction", express.json(), async (req, res) => {
     const orderNumber = responseData?.data?.["Order::order_number"]?.standard;
     const payments = responseData?.data?.Payments || {};
     
-    console.log('Transaction completed successfully');
-    console.log('Order number:', orderNumber);
-    console.log('Payments:', payments);
+    // console.log('Transaction completed successfully');
+    // console.log('Order number:', orderNumber);
+    // console.log('Payments:', payments);
 
     // Generate mock transaction ID for display purposes
     const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
@@ -633,33 +634,99 @@ app.post("/checkout", express.json(), async (req, res) => {
     const { deliveryMethod, paymentMethod } = req.body || {};
     const url = new URL(ORDER_PATH, API_BASE).toString();
 
-    // Step 1: addPayment
-    const payload1 = {
-      actions: [ 
-        { 
-          method: "addPayment"
-        } ],
-      get: ["Payments"],
+
+    // Step 1: addCustomer
+    const payloadCustomer = {
+      actions: [
+        {
+          method: "addCustomer",
+          params: {
+            "Customer::customer_number": "1"
+          }
+        }
+      ],
+      get: ["Order::order_number", "Payments"],
       objectName: "myOrder"
     };
-    const r1 = await fetch(url, {
+    console.log('Adding customer to order:', payloadCustomer);
+    const rCustomer = await fetch(url, {
       method: "POST",
       headers: {
         ...authHeaders(),
         "Content-Type": "application/json",
         "Accept": "application/json"
       },
-      body: JSON.stringify(payload1)
+      body: JSON.stringify(payloadCustomer)
     });
-    const raw1 = await r1.text();
-    let data1; try { data1 = JSON.parse(raw1); } catch { data1 = raw1; }
-    if (!r1.ok) {
-      return res.status(r1.status).json({ error: "Checkout failed (addPayment)", details: data1 });
+    const rawCustomer = await rCustomer.text();
+    let dataCustomer; try { dataCustomer = JSON.parse(rawCustomer); } catch { dataCustomer = rawCustomer; }
+    console.log('addCustomer response status:', rCustomer.status);
+    console.log('addCustomer response:', dataCustomer);
+    if (!rCustomer.ok) {
+      return res.status(rCustomer.status).json({ error: "Checkout failed (addCustomer)", details: dataCustomer });
+    }
+
+    // Step 2: check Payments before addPayment
+    const payloadCheckPayments = {
+      get: ["Payments"],
+      objectName: "myOrder"
+    };
+    const rCheckPayments = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payloadCheckPayments)
+    });
+    const rawCheckPayments = await rCheckPayments.text();
+    let dataCheckPayments; try { dataCheckPayments = JSON.parse(rawCheckPayments); } catch { dataCheckPayments = rawCheckPayments; }
+    let paymentsObj = dataCheckPayments?.data?.Payments || {};
+    let hasPayment = false;
+    for (const k in paymentsObj) {
+      if (k === "state") continue;
+      if (paymentsObj[k]?.payment_id?.standard) {
+        hasPayment = true;
+        break;
+      }
+    }
+
+    let dataPayment;
+    if (!hasPayment) {
+      // Only add payment if none exists
+      const payloadPayment = {
+        actions: [
+          {
+            method: "addPayment"
+          }
+        ],
+        get: ["Payments"],
+        objectName: "myOrder"
+      };
+      const rPayment = await fetch(url, {
+        method: "POST",
+        headers: {
+          ...authHeaders(),
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify(payloadPayment)
+      });
+      const rawPayment = await rPayment.text();
+      try { dataPayment = JSON.parse(rawPayment); } catch { dataPayment = rawPayment; }
+      if (!rPayment.ok) {
+        return res.status(rPayment.status).json({ error: "Checkout failed (addPayment)", details: dataPayment });
+      }
+      paymentsObj = dataPayment?.data?.Payments || {};
+    } else {
+      // Use existing paymentsObj
+      dataPayment = dataCheckPayments;
     }
 
     // Extract paymentID from Payments
     let paymentID = null;
-    const payments = data1?.data?.Payments || {};
+    const payments = dataPayment?.data?.Payments || {};
     for (const [k, v] of Object.entries(payments)) {
       if (k === "state") continue;
       if (v?.payment_id?.standard) {
@@ -668,41 +735,7 @@ app.post("/checkout", express.json(), async (req, res) => {
       }
     }
     if (!paymentID) {
-      return res.status(500).json({ error: "No paymentID found after addPayment", details: data1 });
-    }
-
-    // Step 1.5: addCustomer
-    const payload1_5 = {
-      actions: [
-        {
-          method: "addCustomer",
-          params: {
-            "Customer::customer_number": "194532"
-          }
-        }
-      ],
-      get: ["Order::order_number", "Payments"],
-      objectName: "myOrder"
-    };
-    
-    console.log('Adding customer to order:', payload1_5);
-    const r1_5 = await fetch(url, {
-      method: "POST",
-      headers: {
-        ...authHeaders(),
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify(payload1_5)
-    });
-    const raw1_5 = await r1_5.text();
-    let data1_5; try { data1_5 = JSON.parse(raw1_5); } catch { data1_5 = raw1_5; }
-    
-    console.log('addCustomer response status:', r1_5.status);
-    console.log('addCustomer response:', data1_5);
-
-    if (!r1_5.ok) {
-      return res.status(r1_5.status).json({ error: "Checkout failed (addCustomer)", details: data1_5 });
+      return res.status(500).json({ error: "No paymentID found after addPayment", details: dataPayment });
     }
 
     // Step 2: set delivery and payment method
@@ -791,6 +824,7 @@ const httpsKey  = process.env.HTTPS_KEY;
 const httpsCert = process.env.HTTPS_CERT;
 
 if (httpsKey && httpsCert && fs.existsSync(httpsKey) && fs.existsSync(httpsCert)) {
+  // Start HTTPS only
   const credentials = {
     key:  fs.readFileSync(httpsKey),
     cert: fs.readFileSync(httpsCert),
