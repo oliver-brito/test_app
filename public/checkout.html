@@ -87,9 +87,88 @@
         <button type="submit" class="btn">Submit Payment</button>
       </div>
     </form>
+    <button id="details-btn" class="btn" style="margin-top:16px;">Show Details</button>
     <a href="index.html" class="back">&larr; Back to events</a>
   </div>
+
+  <!-- Modal for details -->
+  <div id="details-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.4); z-index:1000; align-items:center; justify-content:center;">
+    <div style="background:#fff; width:70vw; min-width:320px; max-width:900px; margin:40px auto; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.12); padding:32px; position:relative;">
+      <button id="close-details-modal" style="position:absolute; top:16px; right:16px; background:#ef4444; color:#fff; border:none; border-radius:6px; padding:8px 16px; font-weight:600; cursor:pointer;">Close</button>
+      <h2>Details</h2>
+  <div id="details-content" style="background:#f3f4f6; padding:16px; border-radius:8px; font-size:14px; max-height:60vh; overflow:auto;"></div>
+    </div>
+  </div>
   <script>
+    // Details button logic
+    document.addEventListener('DOMContentLoaded', function() {
+      const detailsBtn = document.getElementById('details-btn');
+      const detailsModal = document.getElementById('details-modal');
+      const detailsContent = document.getElementById('details-content');
+      const closeModalBtn = document.getElementById('close-details-modal');
+
+      // Helper: Render foldable JSON
+      function renderFoldableJSON(obj, parent) {
+        if (typeof obj !== 'object' || obj === null) {
+          const leaf = document.createElement('span');
+          leaf.textContent = JSON.stringify(obj);
+          parent.appendChild(leaf);
+          return;
+        }
+        const isArray = Array.isArray(obj);
+        const container = document.createElement('div');
+        container.style.marginLeft = '16px';
+        for (const key in obj) {
+          if (!obj.hasOwnProperty(key)) continue;
+          const item = document.createElement('div');
+          item.style.marginBottom = '2px';
+          const toggle = document.createElement('span');
+          toggle.textContent = isArray ? `[${key}]` : key;
+          toggle.style.fontWeight = 'bold';
+          toggle.style.cursor = 'pointer';
+          toggle.style.color = '#2563eb';
+          toggle.style.marginRight = '8px';
+          const value = obj[key];
+          const childContainer = document.createElement('div');
+          childContainer.style.display = 'none';
+          childContainer.style.marginLeft = '16px';
+          toggle.onclick = function() {
+            childContainer.style.display = childContainer.style.display === 'none' ? 'block' : 'none';
+          };
+          item.appendChild(toggle);
+          if (typeof value === 'object' && value !== null) {
+            item.appendChild(document.createTextNode(': '));
+            item.appendChild(childContainer);
+            renderFoldableJSON(value, childContainer);
+          } else {
+            item.appendChild(document.createTextNode(': ' + JSON.stringify(value)));
+          }
+          container.appendChild(item);
+        }
+        parent.appendChild(container);
+      }
+
+      if (detailsBtn) {
+        detailsBtn.onclick = async function() {
+          try {
+            console.log('Fetching details...');
+            const r = await fetch('/details');
+            const data = await r.json();
+            detailsContent.innerHTML = '';
+            renderFoldableJSON(data, detailsContent);
+            detailsModal.style.display = 'flex';
+          } catch (err) {
+            detailsContent.innerHTML = '<span style="color:#b91c1c">Error fetching details: ' + err.message + '</span>';
+            detailsModal.style.display = 'flex';
+          }
+        };
+      }
+      if (closeModalBtn) {
+        closeModalBtn.onclick = function() {
+          detailsModal.style.display = 'none';
+        };
+      }
+    });
     async function doCheckout() {
       const deliveryMethod = localStorage.getItem('deliveryMethod') || '';
       const paymentMethod = localStorage.getItem('paymentMethod') || '';
@@ -218,25 +297,34 @@
         const submitPromise = AvHostedInputSDK.submitGroup();
         console.log('submitGroup() called, returned:', submitPromise);
         console.log('Is it a Promise?', submitPromise instanceof Promise);
-        
+
+        function showProcessButton(paymentData, paymentID) {
+          // Remove any previous button
+          const oldBtn = document.getElementById('manual-process-btn');
+          if (oldBtn) oldBtn.remove();
+
+          const resultDiv = document.getElementById('result');
+          const btn = document.createElement('button');
+          btn.id = 'manual-process-btn';
+          btn.className = 'btn';
+          btn.textContent = 'Continue to Process Transaction';
+          btn.style.marginTop = '20px';
+          btn.onclick = async function() {
+            btn.disabled = true;
+            btn.textContent = 'Processing...';
+            await processTransaction(paymentData, paymentID);
+          };
+          resultDiv.appendChild(btn);
+        }
+
         if (submitPromise && typeof submitPromise.then === 'function') {
           // It's a Promise
-          submitPromise.then(async (paymentData) => {
+          submitPromise.then((paymentData) => {
             console.log('=== AvHostedInputSDK.submitGroup() Promise Resolved ===');
-            console.log('Full response:', paymentData);
-            console.log('Response type:', typeof paymentData);
-            console.log('Response constructor:', paymentData ? paymentData.constructor.name : 'null/undefined');
-            console.log('Response keys:', paymentData ? Object.keys(paymentData) : 'null/undefined');
+            console.log('Resolved Promise:', submitPromise);
             
-            try {
-              console.log('JSON stringified:', JSON.stringify(paymentData, null, 2));
-            } catch (e) {
-              console.log('Could not stringify response:', e.message);
-            }
-            console.log('=== End AvHostedInputSDK Response ===');
-            
-            await processTransaction(paymentData, paymentID);
-            
+            showProcessButton(paymentData, paymentID);
+
           }).catch((error) => {
             console.error('=== AvHostedInputSDK.submitGroup() Promise Rejected ===');
             console.error('Error:', error);
@@ -248,7 +336,7 @@
         } else {
           // It's not a Promise, handle synchronously
           console.log('submitGroup() returned synchronously:', submitPromise);
-          processTransaction(submitPromise, paymentID);
+          showProcessButton(submitPromise, paymentID);
         }
       } catch (syncError) {
         console.error('=== Synchronous Error in submitGroup() ===');
@@ -260,8 +348,6 @@
   async function processTransaction(paymentData, paymentID) {
         try {
           console.log('=== PROCESSING TRANSACTION ===');
-          console.log('Payment data to send:', paymentData);
-          
           // Call the transaction endpoint
           const transactionResponse = await fetch('/transaction', {
             method: 'POST',
