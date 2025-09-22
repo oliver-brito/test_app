@@ -33,15 +33,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Redirige a HTTPS si llega por HTTP
-app.use((req, res, next) => {
-  // respeta herramientas locales/health checks
-  if (req.secure || req.headers["x-forwarded-proto"] === "https") return next();
-  const httpsPort = process.env.HTTPS_PORT || 3443;
-  const host = (req.headers.host || "").replace(/:\d+$/, `:${httpsPort}`);
-  return res.redirect(`https://${host}${req.originalUrl}`);
-});
-
 app.use(express.static("public"));
 
 const { API_BASE, AUTH_PATH, UNL_USER, UNL_PASSWORD, UPCOMING_PATH, MAP_PATH, PERFORMANCE_PATH, ORDER_PATH } = process.env;
@@ -585,6 +576,54 @@ app.get("/order", async (req, res) => {
   }
 });
 
+
+app.get("/details", async (req, res) => {
+  try {
+    if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
+    if (!ORDER_PATH) return res.status(500).json({ error: "ORDER_PATH not configured" });
+    const url = new URL(ORDER_PATH, API_BASE).toString();
+
+    const payload = {
+      get: ["Payments"],
+      objectName: "myOrder"
+    };
+
+    console.log('Fetching payment details with payload:', payload);
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const raw = await r.text();
+    let data;
+    try { data = JSON.parse(raw); } catch { 
+      // Always return JSON, even if parsing fails
+      return res.status(500).json({ error: "Invalid JSON from upstream", raw });
+    }
+    if (!r.ok) {
+      return res.status(r.status).json({ error: "Failed to fetch payment details", details: data });
+    }
+
+    res.json({
+      success: true,
+      payments: data?.data?.Payments || {},
+      rawResponse: data
+    });
+    console.log(raw);
+
+  } catch (err) {
+    console.error("Error in /details:", err);
+    res.status(500).json({
+      error: String(err?.message || err)
+    });
+  }
+});
+
 // Real checkout endpoint: calls AV order API with addPayment
 app.post("/checkout", express.json(), async (req, res) => {
   try {
@@ -751,12 +790,6 @@ const httpsPort = process.env.HTTPS_PORT || 3443;
 const httpsKey  = process.env.HTTPS_KEY;
 const httpsCert = process.env.HTTPS_CERT;
 
-// Arranca HTTP (útil para redirección o compatibilidad)
-app.listen(httpPort, () => {
-  console.log(`HTTP  listening at  http://localhost:${httpPort}`);
-});
-
-// Arranca HTTPS si hay certs configurados
 if (httpsKey && httpsCert && fs.existsSync(httpsKey) && fs.existsSync(httpsCert)) {
   const credentials = {
     key:  fs.readFileSync(httpsKey),
@@ -766,5 +799,8 @@ if (httpsKey && httpsCert && fs.existsSync(httpsKey) && fs.existsSync(httpsCert)
     console.log(`HTTPS listening at https://localhost:${httpsPort}`);
   });
 } else {
-  console.warn("HTTPS not started (missing HTTPS_KEY/HTTPS_CERT or files).");
+  // Start HTTP only
+  app.listen(httpPort, () => {
+    console.log(`HTTP listening at http://localhost:${httpPort}`);
+  });
 }
