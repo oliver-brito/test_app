@@ -696,8 +696,8 @@ app.post("/checkout", express.json(), async (req, res) => {
         {
           method: "addCustomer",
           params: {
-            // "Customer::customer_number": "1"
-            "Customer::customer_id": "7508E7EB-32FA-4CD2-BA08-D3CE427CAD70"
+            "Customer::customer_number": "1"
+            // "Customer::customer_id": "7508E7EB-32FA-4CD2-BA08-D3CE427CAD70"
           }
         }
       ],
