@@ -1,4 +1,5 @@
 
+
 import express from "express";
 import dotenv from "dotenv";
 // --- HTTPS support (add this near the top of server.js) ---
@@ -254,7 +255,7 @@ app.post("/map/availability/:id", async (req, res) => {
 
     const performanceId = req.params.id;
     const priceTypeId = req.body?.priceTypeId;
-    const { numSeats = 2 } = req.body?.numSeats;
+    const numSeats = req.body?.numSeats;
 
     const url = new URL(ORDER_PATH, API_BASE).toString();
     const payload = {
@@ -302,6 +303,57 @@ app.post("/map/availability/:id", async (req, res) => {
     res.status(500).json({ error: String(err?.message || err) });
   }
 });
+
+
+
+// POST /removeSeat -> Remove an admission by ID using manageAdmissions
+app.post('/removeSeat', express.json(), async (req, res) => {
+  try {
+    if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
+    if (!ORDER_PATH) return res.status(500).json({ error: "ORDER_PATH not configured" });
+
+    const { admissionId } = req.body || {};
+    if (!admissionId) {
+      return res.status(400).json({ error: "Missing admissionId" });
+    }
+    console.log(`Removing admission ID: ${admissionId}`);
+    const url = new URL(ORDER_PATH, API_BASE).toString();
+    const payload = {
+      actions: [
+        {
+          method: "manageAdmissions",
+          params: {
+            removeAdmissionID: [admissionId]
+          },
+          acceptWarnings: [5414]
+        }
+      ],
+      get: ["Order", "Admissions", "AvailablePaymentMethods", "DeliveryMethodDetails", "Seats"],
+      objectName: "myOrder"
+    };
+
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    const raw = await r.text();
+    let data; try { data = JSON.parse(raw); } catch { data = raw; }
+    if (!r.ok) {
+      return res.status(r.status).json({ error: "Failed to remove admission", details: data });
+    }
+    res.json({ success: true, response: data });
+    console.log(`Admission ID ${admissionId} removal response:`, raw);
+  } catch (err) {
+    console.error("Error in /removeSeat:", err);
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
 
 // GET /events/:id  -> calls PERFORMANCE_PATH with Session + Cookie
 // method call is PERFORMANCE_PATH
@@ -406,6 +458,8 @@ app.post("/map/pricing/:id", async (req, res) => {
     res.status(500).json({ error: String(err?.message || err) });
   }
 });
+
+
 
 // POST /transaction -> Process payment transaction via AudienceView API
 app.post("/transaction", express.json(), async (req, res) => {
@@ -517,7 +571,7 @@ app.get("/order", async (req, res) => {
     const url = new URL(ORDER_PATH, API_BASE).toString();
     
     const payload = {
-      get: ["Order"],
+      get: ["Order", "Admissions"],
       objectName: "myOrder"
     };
 
@@ -566,7 +620,8 @@ app.get("/order", async (req, res) => {
     res.json({
       success: true,
       order: orderData,
-      rawResponse: responseData
+      rawResponse: responseData,
+      admissions: responseData?.data?.Admissions || {}
     });
 
   } catch (err) {
@@ -641,7 +696,8 @@ app.post("/checkout", express.json(), async (req, res) => {
         {
           method: "addCustomer",
           params: {
-            "Customer::customer_number": "1"
+            // "Customer::customer_number": "1"
+            "Customer::customer_id": "7508E7EB-32FA-4CD2-BA08-D3CE427CAD70"
           }
         }
       ],
@@ -743,7 +799,7 @@ app.post("/checkout", express.json(), async (req, res) => {
       set: {
         "Order::deliverymethod_id": deliveryMethod,
         [`Payments::${paymentID}::active_payment`]: paymentMethod,
-        [`Payments::${paymentID}::swipe_indicator`]: "Internet",
+        // [`Payments::${paymentID}::swipe_indicator`]: "Internet",
         [`Payments::${paymentID}::cardholder_name`]: "Oliver Brito"
       },
       get: ["Order::order_number", "Payments"],
