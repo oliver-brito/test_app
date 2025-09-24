@@ -1,4 +1,4 @@
-Run the script to generate certificates:
+Run the script to generate certificates (or use ngrok):
 ```bash
 ./generate_certs.ps1
 ```
