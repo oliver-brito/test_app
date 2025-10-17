@@ -242,7 +242,7 @@ router.post("/checkout", express.json(), async (req, res) => {
       set: {
         "Order::deliverymethod_id": deliveryMethod,
         [`Payments::${paymentID}::active_payment`]: paymentMethod,
-        // [`Payments::${paymentID}::swipe_indicator`]: "Internet",
+        [`Payments::${paymentID}::swipe_indicator`]: "Internet",
         [`Payments::${paymentID}::cardholder_name`]: "Oliver Brito"
       },
       get: ["Order::order_number", "Payments"],
@@ -736,10 +736,11 @@ router.post("/processAdyenPayment", async (req, res) => {
     const orderNumber = transactionData?.data?.["Order::order_number"]?.standard;
     const finalPayments = transactionData?.data?.Payments || {};
     
+    if (isDebugMode()) console.log("Adyen payment processed successfully");
+
     // Generate transaction ID for display purposes
     const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
     
-    if (isDebugMode()) console.log("Adyen payment processed successfully");
     res.json({
       success: true,
       paymentID: paymentID,
@@ -774,4 +775,93 @@ router.post("/processAdyenPayment", async (req, res) => {
   }
 });
 
+// POST /getPaymentMethodType -> Get payment method type for a specific payment ID
+router.post("/getPaymentMethodType", async (req, res) => {
+  try {
+    if (isDebugMode()) console.log("Starting /getPaymentMethodType route");
+    
+    if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
+    if (!ORDER_PATH) return res.status(500).json({ error: "ORDER_PATH not configured" });
+
+    const { paymentID } = req.body || {};
+    
+    if (!paymentID) {
+      return res.status(400).json({ 
+        error: "Missing paymentID",
+        message: "paymentID is required to fetch payment method type"
+      });
+    }
+
+    const url = new URL(ORDER_PATH, API_BASE).toString();
+    
+    // Get the payment method type from AudienceView
+    const payload = {
+      get: [`Payments::${paymentID}::paymentmethod_type`],
+      objectName: "myOrder"
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    // Capture any cookies set by the endpoint
+    const setCookie = response.headers.get("set-cookie");
+    if (setCookie) {
+      const pairs = parseSetCookieHeader(setCookie);
+      setCookies(mergeCookiePairs(getCookies(), pairs));
+    }
+
+    const responseText = await response.text();
+
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (e) {
+      return res.status(500).json({
+        error: "Invalid response from payment API",
+        details: responseText
+      });
+    }
+
+    if (!response.ok) {
+      if (isDebugMode()) console.log("Payment method type fetch failed:", response.status);
+      return res.status(response.status).json({
+        error: "Failed to fetch payment method type",
+        details: responseData
+      });
+    }
+
+    // Extract the payment method type from response
+    const paymentMethodType = responseData?.data?.[`Payments::${paymentID}::paymentmethod_type`];
+    
+    if (!paymentMethodType) {
+      if (isDebugMode()) console.log("No payment method type found in response");
+      return res.status(404).json({
+        error: "Payment method type not found",
+        paymentID: paymentID,
+        rawResponse: responseData
+      });
+    }
+
+    if (isDebugMode()) console.log("Payment method type fetched successfully");
+    res.json({
+      success: true,
+      paymentID: paymentID,
+      paymentMethodType: paymentMethodType,
+      rawResponse: responseData
+    });
+
+  } catch (err) {
+    if (isDebugMode()) console.log("Error in /getPaymentMethodType:", err.message);
+    res.status(500).json({ 
+      error: String(err?.message || err) 
+    });
+  }
+});
 export default router;

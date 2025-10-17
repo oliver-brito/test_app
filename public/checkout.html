@@ -7,7 +7,7 @@
 
   <!-- Define global flags before anything else -->
   <script>
-    window.adyen = true;
+    window.adyen = false; // Will be set dynamically based on payment method type
   </script>
 
   <!-- Hosted fields and helper scripts -->
@@ -202,6 +202,35 @@
         let conversationToken = payment_details.server_to_client_token?.standard || '';
         let paymentID = payment_details.payment_id?.standard || '';
         window.paymentID = paymentID;
+
+        // Check payment method type and set adyen flag
+        if (paymentID) {
+          try {
+            const paymentTypeResponse = await fetch('/getPaymentMethodType', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ paymentID: paymentID })
+            });
+            const paymentTypeData = await paymentTypeResponse.json();
+            console.log('Payment method type response:', paymentTypeData);
+            
+            if (paymentTypeData.success && paymentTypeData.paymentMethodType) {
+              const paymentMethodType = paymentTypeData.paymentMethodType;
+              // Check if any field contains "adyen" (case-insensitive)
+              const containsAdyen = Object.values(paymentMethodType).some(value => 
+                typeof value === 'string' && value.toLowerCase().includes('adyen')
+              );
+              window.adyen = containsAdyen;
+              console.log('Payment method type contains Adyen:', containsAdyen, paymentMethodType);
+            } else {
+              console.warn('Failed to get payment method type, defaulting adyen to false');
+              window.adyen = false;
+            }
+          } catch (error) {
+            console.warn('Error checking payment method type:', error, 'defaulting adyen to false');
+            window.adyen = false;
+          }
+        }
 
         // Allow override via prompt (for dev/debug)
         if (window.location.hash.includes('override')) {
