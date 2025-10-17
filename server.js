@@ -12,25 +12,24 @@ dotenv.config();
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
-// Add security headers including CSP
 app.use((req, res, next) => {
   res.setHeader(
     "Content-Security-Policy",
     [
       "default-src 'self';",
-      // ✅ Allow Adyen JS
-      "script-src 'self' 'unsafe-inline' https://checkoutshopper-test.adyen.com;",
-      // ✅ Allow Adyen CSS
-      "style-src 'self' 'unsafe-inline' https://checkoutshopper-test.adyen.com;",
-      // ✅ Allow images and fonts from Adyen
-      "img-src 'self' data: https://checkoutshopper-test.adyen.com;",
-      "font-src 'self' data: https://checkoutshopper-test.adyen.com;",
-      // ✅ Allow XHR/fetch calls to Adyen
-      "connect-src 'self' https://checkoutshopper-test.adyen.com;",
-      // ✅ Allow Adyen iframes and hosted fields
-      "frame-src 'self' https://checkoutshopper-test.adyen.com;",
-      "frame-ancestors 'self' https://checkoutshopper-test.adyen.com;",
-      "child-src 'self' https://checkoutshopper-test.adyen.com;"
+      // ✅ Permitir scripts tanto desde adyen.com como cdn.adyen.com
+      "script-src 'self' 'unsafe-inline' https://*.adyen.com;",
+      // ✅ Permitir estilos también desde ambos
+      "style-src 'self' 'unsafe-inline' https://*.adyen.com;",
+      // ✅ Permitir imágenes y fuentes desde Adyen
+      "img-src 'self' data: https://*.adyen.com;",
+      "font-src 'self' data: https://*.adyen.com;",
+      // ✅ Permitir XHR/fetch a Adyen
+      "connect-src 'self' https://*.adyen.com;",
+      // ✅ Permitir iframes y hosted fields de Adyen
+      "frame-src 'self' https://*.adyen.com;",
+      "frame-ancestors 'self' https://*.adyen.com;",
+      "child-src 'self' https://*.adyen.com;"
     ].join(" ")
   );
 
@@ -39,6 +38,7 @@ app.use((req, res, next) => {
   res.setHeader("X-XSS-Protection", "1; mode=block");
   next();
 });
+
 
 app.use(express.static("public"));
 
@@ -876,6 +876,495 @@ app.post("/checkout", express.json(), async (req, res) => {
   } catch (err) {
     console.error("Error in /checkout:", err);
     res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+
+app.post("/getPaymentClientConfig", async (req, res) => {
+  // Handle POST request with payment context
+  return handlePaymentConfig(req, res);
+});
+
+async function handlePaymentConfig(req, res) {
+  try {
+    const { paymentMethodId, eventId, paymentID } = req.body || {};
+    
+    console.log('Payment config requested with context:', {
+      paymentMethodId,
+      eventId, 
+      paymentID
+    });
+    
+    // Check if we have a payment method ID to work with
+    if (!paymentMethodId) {
+      console.warn('No paymentMethodId provided, using fallback config');
+      return res.json({
+        environment: 'test',
+        clientKey: 'test_7REK4YQWRZB2DPRS7RNTFTGX2MPKY4SQ',
+        countryCode: 'US',
+        currency: 'USD'
+      });
+    }
+
+    // Make the call to AudienceView paymentMethod API
+    if (!CURRENT_SESSION) {
+      console.warn('No active session, using fallback config');
+      return res.json({
+        environment: 'test',
+        clientKey: 'test_7REK4YQWRZB2DPRS7RNTFTGX2MPKY4SQ',
+        countryCode: 'US',
+        currency: 'USD'
+      });
+    }
+
+    const paymentMethodUrl = new URL('/app/WebAPI/v2/paymentMethod', API_BASE).toString();
+    const payload = {
+      actions: [
+        {
+          method: "getPaymentClientConfig",
+          params: {
+            payment_method_id: paymentMethodId
+          },
+          acceptWarnings: [4294]
+        }
+      ],
+      objectName: "myPaymentMethod"
+    };
+
+    console.log('Calling AudienceView paymentMethod API:', paymentMethodUrl);
+    console.log('Payload:', JSON.stringify(payload, null, 2));
+
+    const response = await fetch(paymentMethodUrl, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const responseText = await response.text();
+    console.log('PaymentMethod API response status:', response.status);
+    console.log('PaymentMethod API response:', responseText);
+
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse paymentMethod API response:', e);
+      responseData = responseText;
+    }
+
+    if (!response.ok) {
+      console.error('PaymentMethod API error:', responseData);
+      // Fall back to default config on API error
+      return res.json({
+        environment: 'test',
+        clientKey: 'test_7REK4YQWRZB2DPRS7RNTFTGX2MPKY4SQ',
+        countryCode: 'US',
+        currency: 'USD',
+        apiError: responseData
+      });
+    }
+
+    // Extract the configuration from the AudienceView response structure
+    try {
+      const returnData = responseData?.return?.[0];
+      if (returnData?.method === 'getPaymentClientConfig' && returnData?.values?.[0]?.name === 'result') {
+        // Parse the JSON string in the result value
+        const configJson = returnData.values[0].value;
+        const parsedConfig = JSON.parse(configJson);
+        const adyenConfig = parsedConfig?.config;
+        
+        console.log('Parsed Adyen config:', adyenConfig);
+        
+        if (adyenConfig) {
+          // Extract Adyen configuration
+          const clientConfig = {
+            environment: adyenConfig.adyen_env || 'test',
+            clientKey: adyenConfig.adyen_client_key || 'test_7REK4YQWRZB2DPRS7RNTFTGX2MPKY4SQ',
+            countryCode: 'US', // Not provided in AV response, using default
+            currency: 'USD',   // Not provided in AV response, using default
+            showPayButton: adyenConfig.adyen_showpaybutton || false,
+            hostedFieldUps: adyenConfig.hosted_field_ups || false,
+            hostedPageUps: adyenConfig.hosted_page_ups || false,
+            phoneServiceUps: adyenConfig.phone_service_ups || false,
+            adyenGatewayType: adyenConfig.adyen_gateway_type || false,
+            deviceFingerprint: adyenConfig.device_fingerprint || null,
+            rawConfig: adyenConfig
+          };
+          
+          return res.json(clientConfig);
+        }
+      }
+      
+      // If we can't parse the expected structure, log and fall back
+      console.warn('Unexpected API response structure, using fallback config');
+      console.warn('Response data:', responseData);
+      
+    } catch (parseError) {
+      console.error('Error parsing AudienceView config response:', parseError);
+    }
+    
+    // Fallback configuration
+    res.json({
+      environment: 'test',
+      clientKey: 'test_7REK4YQWRZB2DPRS7RNTFTGX2MPKY4SQ',
+      countryCode: 'US',
+      currency: 'USD',
+      apiResponse: responseData,
+      fallback: true
+    });
+    
+  } catch (err) {
+    console.error("Error in handlePaymentConfig:", err);
+    // Always fall back to working config on error
+    res.json({
+      environment: 'test',
+      clientKey: 'test_7REK4YQWRZB2DPRS7RNTFTGX2MPKY4SQ',
+      countryCode: 'US',
+      currency: 'USD',
+      error: String(err?.message || err)
+    });
+  }
+}
+
+app.post("/getPaymentResponse", async (req, res) => {
+  try {
+    const { paymentID } = req.body || {};
+    
+    console.log('Payment response requested for paymentID:', paymentID);
+    
+    // Check authentication
+    if (!CURRENT_SESSION) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    
+    if (!ORDER_PATH) {
+      return res.status(500).json({ error: "ORDER_PATH not configured" });
+    }
+
+    // Check if we have a payment ID
+    if (!paymentID) {
+      return res.status(400).json({ 
+        error: "Missing paymentID",
+        message: "paymentID is required to fetch payment gateway config"
+      });
+    }
+
+    const url = new URL(ORDER_PATH, API_BASE).toString();
+    const payload = {
+      get: [
+        `Payments::${paymentID}::paymentmethod_gateway_config`
+      ],
+      objectName: "myOrder"
+    };
+
+    console.log('Calling AudienceView order API for payment response:', url);
+    console.log('Payload:', JSON.stringify(payload, null, 2));
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const responseText = await response.text();
+    console.log('Payment response API status:', response.status);
+    console.log('Payment response API response:', responseText);
+
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse payment response API response:', e);
+      return res.status(500).json({ 
+        error: "Invalid response from payment API",
+        details: responseText
+      });
+    }
+
+    if (!response.ok) {
+      console.error('Payment response API error:', responseData);
+      return res.status(response.status).json({
+        error: "Failed to fetch payment gateway config",
+        details: responseData
+      });
+    }
+
+    // Extract the payment gateway configuration
+    const gatewayConfig = responseData?.data?.[`Payments::${paymentID}::paymentmethod_gateway_config`];
+    
+    if (!gatewayConfig) {
+      console.warn('No payment gateway config found in response');
+      return res.status(404).json({
+        error: "Payment gateway config not found",
+        paymentID: paymentID,
+        rawResponse: responseData
+      });
+    }
+
+    console.log('Payment gateway config retrieved:', gatewayConfig);
+
+    // Parse the payment methods from the JSON string in the standard field
+    try {
+      const paymentMethodsJson = gatewayConfig.standard || gatewayConfig.display || gatewayConfig.input;
+      
+      if (paymentMethodsJson) {
+        const paymentMethodsConfig = JSON.parse(paymentMethodsJson);
+        console.log('Parsed payment methods config:', paymentMethodsConfig);
+        
+        res.json({
+          success: true,
+          paymentID: paymentID,
+          paymentMethodsResponse: paymentMethodsConfig,
+          gatewayConfig: gatewayConfig,
+          rawResponse: responseData
+        });
+      } else {
+        console.warn('No payment methods JSON found in gateway config');
+        res.json({
+          success: true,
+          paymentID: paymentID,
+          gatewayConfig: gatewayConfig,
+          rawResponse: responseData,
+          warning: "No payment methods configuration found"
+        });
+      }
+      
+    } catch (parseError) {
+      console.error('Error parsing payment methods JSON:', parseError);
+      console.error('JSON string was:', gatewayConfig.standard);
+      
+      res.json({
+        success: true,
+        paymentID: paymentID,
+        gatewayConfig: gatewayConfig,
+        rawResponse: responseData,
+        parseError: parseError.message
+      });
+    }
+
+  } catch (err) {
+    console.error("Error in /getPaymentResponse:", err);
+    res.status(500).json({ 
+      error: String(err?.message || err) 
+    });
+  }
+});
+
+// POST /processAdyenPayment -> Process Adyen payment data via AudienceView
+app.post("/processAdyenPayment", async (req, res) => {
+  try {
+    if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
+    if (!ORDER_PATH) return res.status(500).json({ error: "ORDER_PATH not configured" });
+
+    const { externalData, paymentID } = req.body || {};
+    
+    console.log('Processing Adyen payment with data:', { externalData, paymentID });
+    
+    if (!externalData) {
+      return res.status(400).json({ 
+        error: "Missing externalData",
+        message: "externalData is required for Adyen payment processing"
+      });
+    }
+    
+    if (!paymentID) {
+      return res.status(400).json({ 
+        error: "Missing paymentID",
+        message: "paymentID is required to identify the payment record"
+      });
+    }
+
+    const url = new URL(ORDER_PATH, API_BASE).toString();
+    
+    // Set the external payment data in AudienceView
+    const payload = {
+      set: {
+        [`Payments::${paymentID}::external_payment_data`]: externalData
+      },
+      objectName: "myOrder",
+      get: ["Payments"]
+    };
+
+    console.log('Calling AudienceView order API to set external payment data:', url);
+    console.log('Payload:', JSON.stringify(payload, null, 2));
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    // Capture any cookies set by the endpoint
+    const setCookie = response.headers.get("set-cookie");
+    if (setCookie) {
+      const pairs = parseSetCookieHeader(setCookie);
+      CURRENT_COOKIES = mergeCookiePairs(CURRENT_COOKIES, pairs);
+    }
+
+    const responseText = await response.text();
+    console.log('Adyen payment processing response status:', response.status);
+    console.log('Adyen payment processing response:', responseText);
+
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse Adyen payment response:', e);
+      return res.status(500).json({
+        error: "Invalid response from payment API",
+        details: responseText
+      });
+    }
+
+    if (!response.ok) {
+      console.error('Adyen payment API error:', responseData);
+      return res.status(response.status).json({
+        error: "Failed to process Adyen payment",
+        details: responseData
+      });
+    }
+
+    // Extract payments information from response
+    const payments = responseData?.data?.Payments || {};
+    const paymentRecord = payments[paymentID];
+    
+    // Check if external_payment_data was successfully set
+    const externalPaymentDataSet = paymentRecord?.external_payment_data?.standard;
+    const externalDataMatches = externalPaymentDataSet === externalData;
+    
+    console.log('Adyen payment processing completed');
+    console.log('Expected external data:', externalData);
+    console.log('Actual external data in response:', externalPaymentDataSet);
+    console.log('External data set successfully:', externalDataMatches);
+
+    if (!externalDataMatches) {
+      return res.json({
+        success: false,
+        paymentID: paymentID,
+        externalDataSet: false,
+        expectedData: externalData,
+        actualData: externalPaymentDataSet,
+        payments: payments,
+        message: "Adyen payment data verification failed - external data not set correctly",
+        rawResponse: responseData
+      });
+    }
+
+    // Step 2: If external data was set successfully, call the transaction endpoint to complete the payment
+    console.log('External data verified successfully, proceeding to complete transaction...');
+    
+    const transactionPayload = {
+      actions: [
+        {
+          method: "insert",
+          params: {
+            notification: "correspondence"
+          },
+          acceptWarnings: [
+            5008,
+            4224,
+            5388
+          ]
+        }
+      ],
+      get: ["Order::order_number", "Payments"],
+      objectName: "myOrder"
+    };
+
+    console.log('Calling AudienceView order insert to complete transaction:', transactionPayload);
+
+    const transactionResponse = await fetch(url, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(transactionPayload)
+    });
+
+    const transactionResponseText = await transactionResponse.text();
+    console.log('Transaction completion response status:', transactionResponse.status);
+    console.log('Transaction completion response:', transactionResponseText);
+
+    let transactionData;
+    try {
+      transactionData = JSON.parse(transactionResponseText);
+    } catch (e) {
+      console.error('Failed to parse transaction completion response:', e);
+      return res.status(500).json({
+        success: false,
+        error: "Invalid response from transaction completion",
+        details: transactionResponseText,
+        externalDataSet: true,
+        paymentID: paymentID
+      });
+    }
+
+    if (!transactionResponse.ok) {
+      console.error('Transaction completion API error:', transactionData);
+      return res.status(transactionResponse.status).json({
+        success: false,
+        error: "Failed to complete transaction after setting external data",
+        details: transactionData,
+        externalDataSet: true,
+        paymentID: paymentID
+      });
+    }
+
+    // Extract order information from transaction response
+    const orderNumber = transactionData?.data?.["Order::order_number"]?.standard;
+    const finalPayments = transactionData?.data?.Payments || {};
+    
+    console.log('Transaction completed successfully');
+    console.log('Order number:', orderNumber);
+
+    // Generate transaction ID for display purposes
+    const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    
+    res.json({
+      success: true,
+      paymentID: paymentID,
+      externalDataSet: true,
+      transactionCompleted: true,
+      orderId: orderNumber,
+      transactionId: transactionId,
+      redirectUrl: `/viewOrder.html?orderId=${orderNumber || transactionId}&transactionId=${transactionId}`,
+      transactionDetails: {
+        success: true,
+        transactionId: transactionId,
+        orderId: orderNumber || transactionId,
+        timestamp: new Date().toISOString(),
+        paymentMethod: "Adyen",
+        status: "completed",
+        audienceViewResponse: transactionData
+      },
+      externalDataVerification: {
+        expectedData: externalData,
+        actualData: externalPaymentDataSet
+      },
+      payments: finalPayments,
+      message: "Adyen payment processed and transaction completed successfully",
+      rawTransactionResponse: transactionData
+    });
+
+  } catch (err) {
+    console.error("Error in /processAdyenPayment:", err);
+    res.status(500).json({ 
+      error: String(err?.message || err) 
+    });
   }
 });
 

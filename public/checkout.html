@@ -4,7 +4,24 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Checkout (Mock)</title>
+
+  <!-- Define global flags before anything else -->
+  <script>
+    window.adyen = true;
+  </script>
+
+  <!-- Hosted fields and helper scripts -->
   <script src="hostedFields.js"></script>
+
+  <script src="https://checkoutshopper-live.cdn.adyen.com/checkoutshopper/sdk/6.23.0/adyen.js"
+      integrity="sha384-fwC67LcglMpjyKzY7kj0vMbD5b9MZAzsxBj4M92eh7d3vtaBa0hKdUHCUVpHeb2K"
+      crossorigin="anonymous"></script>
+	 
+	<link rel="stylesheet"
+	     href="https://checkoutshopper-live.cdn.adyen.com/checkoutshopper/sdk/6.23.0/adyen.css"
+	     integrity="sha384-GQvTx/DKyDwPrqukLGTOBzAUHwXJkuUv8vwhr0ynfUapxHMCrzk84rMbd3Q/i74t"
+	     crossorigin="anonymous">
+
   <style>
     body { font-family: system-ui, sans-serif; background: #fafafa; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 32px; }
@@ -15,8 +32,7 @@
     .success { color: #16a34a; font-weight: 600; }
     .error { color: #b91c1c; font-weight: 600; }
     .back { display: inline-block; margin-top: 24px; color: #2563eb; text-decoration: none; }
-    
-    /* Form styling */
+
     form label { 
       display: block; 
       font-weight: 600; 
@@ -25,7 +41,7 @@
       color: #374151;
       font-size: 14px;
     }
-    
+
     .hosted-field { 
       border: 1px solid #d1d5db; 
       border-radius: 6px; 
@@ -36,12 +52,12 @@
       box-sizing: border-box;
       transition: border-color 0.15s ease-in-out;
     }
-    
+
     .hosted-field:focus-within {
       border-color: #3b82f6;
       box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
     }
-    
+
     .btn { 
       background: #3b82f6; 
       color: white; 
@@ -55,17 +71,15 @@
       width: 100%;
       transition: background-color 0.15s ease-in-out;
     }
-    
-    .btn:hover { 
-      background: #2563eb; 
-    }
-    
-    .btn:disabled {
-      background: #9ca3af;
-      cursor: not-allowed;
-    }
+
+    .btn:hover { background: #2563eb; }
+    .btn:disabled { background: #9ca3af; cursor: not-allowed; }
+
+    .adyen-dropin { margin-top: 24px; max-width: 100%; }
+    .adyen-dropin .adyen-checkout__payment-method { margin-bottom: 16px; }
   </style>
 </head>
+
 <body>
   <div class="container">
     <h1>Checkout</h1>
@@ -200,9 +214,9 @@
           }
         }
 
-        // Render checkout info and add Change Info button
-        function renderCheckoutInfo() {
-          resultDiv.innerHTML = `
+        // Function to render shared checkout info
+        function renderSharedInfo() {
+          return `
             <div class="label">Event ID:</div><div class="value">${eventId}</div>
             <div class="label">Delivery Method:</div><div class="value">${deliveryMethod}</div>
             <div class="label">Payment Method:</div><div class="value">${paymentMethod}</div>
@@ -210,28 +224,190 @@
             <div class="label">Conversation Token:</div><div class="value" id="conv-token-value">${conversationToken}</div>
             <div class="label">Payment ID:</div><div class="value" id="payment-id-value">${paymentID}</div>
             <button type="button" class="btn" id="change-info-btn" style="margin-bottom:16px; width:auto;">Change Info</button>
-            <form id="payment-form" method="post" action="process_payment" style="margin-top:24px;">
-              <h3>Payment Details</h3>
-              <label for="account_number-container">Account Number:</label>
-              <div id="account_number-container" class="hosted-field"></div>
-              <label for="cvv-container">CVV:</label>
-              <div id="cvv-container" class="hosted-field"></div>
-              <label for="exp_date-container">Expiration Date:</label>
-              <div id="exp_date-container" class="hosted-field"></div>
-              <label for="cardholder_name-container">Cardholder Name:</label>
-              <input 
-                type="text" 
-                name="BOset::BOorder::Payments::${paymentID}::cardholder_name" 
-                maxlength="100" 
-                class="input form-control" 
-                value="" 
-                title="Cardholder Name" 
-                id="BOset::BOorder::Payments::${paymentID}::cardholder_name" 
-                required 
-                autocomplete="cc-name">
-              <button type="submit" class="btn" id="submit-button" onClick="handleSubmit(event)">Submit Payment</button>
-            </form>
           `;
+        }
+
+        // Function to get payment configuration
+        async function getPaymentConfiguration() {
+          try {
+            // Get current payment context
+            const paymentMethodId = localStorage.getItem('paymentMethod') || '';
+            const eventId = localStorage.getItem('eventId') || '';
+            
+            // Fetch configuration from server
+            const response = await fetch('/getPaymentClientConfig', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                paymentMethodId: paymentMethodId,
+                eventId: eventId,
+                paymentID: window.paymentID
+              })
+            });
+            const serverConfig = await response.json();
+            console.log('Server payment config:', serverConfig);
+            
+            // Use server config if available, otherwise fall back to defaults
+            return {
+              environment: serverConfig.environment || 'test',
+              clientKey: serverConfig.clientKey || 'test_7REK4YQWRZB2DPRS7RNTFTGX2MPKY4SQ',
+              countryCode: serverConfig.countryCode || 'US',
+              currency: serverConfig.currency || 'USD'
+            };
+          } catch (error) {
+            console.warn('Failed to fetch payment config from server, using defaults:', error);
+            // Fallback to default configuration
+            return {
+              environment: 'test', // 'test' or 'live'
+              clientKey: 'test_7REK4YQWRZB2DPRS7RNTFTGX2MPKY4SQ', // Your client key
+              countryCode: 'US',
+              currency: 'USD'
+            };
+          }
+        }
+
+        // Function to get payment response (if needed)
+        async function getPaymentResponse() {
+          try {
+            const response = await fetch('/getPaymentResponse', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                paymentID: window.paymentID
+              })
+            });
+            const paymentResponse = await response.json();
+            console.log('Payment response from server:', paymentResponse);
+            return paymentResponse;
+          } catch (error) {
+            console.warn('Failed to fetch payment response from server:', error);
+            return null;
+          }
+        }
+
+        // Function to handle Adyen payment submission
+        async function handleAdyenSubmit(state, dropin) {
+          console.log('Adyen Drop-in onSubmit:', state);
+          try {
+            // Send payment data to server for processing
+            const response = await fetch('/processAdyenPayment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                externalData: JSON.stringify(state.data),
+                paymentID: window.paymentID
+              })
+            });
+            const result = await response.json();
+            console.log('Payment processing result:', result);
+            
+            if (result.success && result.redirectUrl) {
+              // Redirect to confirmation page
+              window.location.href = result.redirectUrl;
+            } else if (result.action) {
+              // Handle additional action (3D Secure, etc.)
+              dropin.handleAction(result.action);
+            } else {
+              throw new Error(result.error || 'Payment failed');
+            }
+          } catch (error) {
+            console.error('Payment submission error:', error);
+            alert('Payment submission failed: ' + error.message);
+          }
+        }
+
+        async function renderAdyenDropIn() {
+          const paymentConfig = await getPaymentConfiguration();
+          const paymentResponse = await getPaymentResponse();
+          
+          // Render Adyen Drop-in
+          const adyenContainer = document.createElement('div');
+          adyenContainer.id = 'adyen-dropin-container';
+          adyenContainer.className = 'adyen-dropin';
+          resultDiv.appendChild(adyenContainer);
+
+          try {
+            // Use real payment methods from AudienceView if available, otherwise fallback to mock
+            let paymentMethodsResponse;
+            
+            if (paymentResponse && paymentResponse.success && paymentResponse.paymentMethodsResponse) {
+              console.log('Using real payment methods from AudienceView:', paymentResponse.paymentMethodsResponse);
+              paymentMethodsResponse = paymentResponse.paymentMethodsResponse;
+            } else {
+              console.warn('No payment response available, using fallback payment methods');
+              paymentMethodsResponse = {
+                paymentMethods: [
+                  {
+                    name: 'Credit Card',
+                    type: 'scheme'
+                  },
+                  {
+                    name: 'PayPal',
+                    type: 'paypal'
+                  }
+                ]
+              };
+            }
+
+            // Initialize Adyen Drop-in with real or fallback configuration
+            const configuration = {
+              environment: paymentConfig.environment,
+              clientKey: paymentConfig.clientKey,
+              countryCode: paymentConfig.countryCode,
+              currency: paymentConfig.currency,
+              paymentMethodsResponse: paymentMethodsResponse,
+              onSubmit: (state, dropin) => {
+                handleAdyenSubmit(state, dropin);
+              },
+              onAdditionalDetails: (state, dropin) => {
+                console.log('Adyen Drop-in onAdditionalDetails:', state);
+              },
+              onError: (error, dropin) => {
+                console.error('Adyen Drop-in error:', error);
+                alert('Payment error: ' + error.message);
+              }
+            };
+            const { AdyenCheckout, Dropin, Card, GooglePay, PayPal  } = window.AdyenWeb;
+            const checkout = await AdyenCheckout(configuration);
+            const dropin = new Dropin(checkout, {});
+            dropin.mount('#adyen-dropin-container');
+          }catch (err) {
+            console.error('Error initializing Adyen Drop-in:', err);
+            resultDiv.innerHTML += `<div class="error">Error initializing Adyen Drop-in: ${err.message}</div>`;
+          }
+        }
+
+        // Render checkout info and add Change Info button
+        function renderCheckoutInfo() {
+          if (window.adyen) {
+            // Render only basic info for Adyen, no payment form
+            resultDiv.innerHTML = renderSharedInfo();
+          } else {
+            // Render full form for hosted fields
+            resultDiv.innerHTML = renderSharedInfo() + `
+              <form id="payment-form" method="post" action="process_payment" style="margin-top:24px;">
+                <h3>Payment Details</h3>
+                <label for="account_number-container">Account Number:</label>
+                <div id="account_number-container" class="hosted-field"></div>
+                <label for="cvv-container">CVV:</label>
+                <div id="cvv-container" class="hosted-field"></div>
+                <label for="exp_date-container">Expiration Date:</label>
+                <div id="exp_date-container" class="hosted-field"></div>
+                <label for="cardholder_name-container">Cardholder Name:</label>
+                <input 
+                  type="text" 
+                  name="BOset::BOorder::Payments::${paymentID}::cardholder_name" 
+                  maxlength="100" 
+                  class="input form-control" 
+                  value="" 
+                  title="Cardholder Name" 
+                  id="BOset::BOorder::Payments::${paymentID}::cardholder_name" 
+                  required 
+                  autocomplete="cc-name">
+                <button type="submit" class="btn" id="submit-button" onClick="handleSubmit(event)">Submit Payment</button>
+              </form>
+            `;
+          }
         }
 
         // Function to (re)initialize hosted fields
@@ -262,7 +438,17 @@
 
         // Initial render and init
         renderCheckoutInfo();
-        initHostedFields();
+        
+        // Choose payment rendering based on adyen flag
+        if (window.adyen) {
+          // create Adyen Drop-in mount
+          const adyenContainer = document.createElement('div');
+          adyenContainer.id = 'adyen-dropin-container';
+          resultDiv.appendChild(adyenContainer);
+          renderAdyenDropIn();
+        } else {
+          initHostedFields();
+        }
 
         // Add Change Info button logic
         document.getElementById('change-info-btn').onclick = function() {
@@ -277,7 +463,11 @@
           }
           // Re-render and re-init
           renderCheckoutInfo();
-          initHostedFields();
+          if (window.adyen) {
+            renderAdyenDropIn();
+          } else {
+            initHostedFields();
+          }
         };
       } catch (err) {
         resultDiv.innerHTML = `<div class="error">Checkout failed: ${err.message}</div>`;
