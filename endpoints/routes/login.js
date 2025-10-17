@@ -2,6 +2,7 @@
 import express from "express";
 import { setSession } from "../utils/sessionStore.js";
 import { filterCookieHeader } from "../utils/cookieUtils.js";
+import { isDebugMode } from "../utils/debug.js";
 
 const router = express.Router();
 
@@ -10,11 +11,11 @@ const router = express.Router();
  * Authenticates the user with AudienceView API and stores session + cookies.
  */
 router.post("/login", async (_req, res) => {
-    console.log("Received /login request");
   try {
+    if (isDebugMode()) console.log("Starting /login route");
+    
     const url = new URL(process.env.AUTH_PATH, process.env.API_BASE).toString();
     const body = { userid: process.env.UNL_USER, password: process.env.UNL_PASSWORD };
-    console.log("Authenticating with AudienceView API at:", url, "for user:", body);
     const r = await fetch(url, {
       method: "POST",
       headers: {
@@ -30,6 +31,7 @@ router.post("/login", async (_req, res) => {
     catch { data = raw; }
 
     if (!r.ok || !data?.session) {
+      if (isDebugMode()) console.log("Login authentication failed:", r.status);
       return res.status(r.status || 500).json({ error: "Auth failed", details: data });
     }
 
@@ -40,9 +42,10 @@ router.post("/login", async (_req, res) => {
     // Save globally
     setSession(session, cookies);
 
+    if (isDebugMode()) console.log("Login successful");
     res.json({ session: data.session, version: data.version });
   } catch (err) {
-    console.error("Error in /login:", err);
+    if (isDebugMode()) console.log("Error in /login:", err.message);
     res.status(500).json({ error: String(err?.message || err) });
   }
 });

@@ -2,6 +2,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import path from "path";
+import { isDebugMode } from "../utils/debug.js";
 import { fileURLToPath } from "url";
 import { CURRENT_SESSION } from "../utils/sessionStore.js";
 import { getCookies, setCookies } from "../utils/sessionStore.js";
@@ -20,6 +21,8 @@ const router = express.Router();
 // GET /order -> Retrieve order details from AudienceView
 router.get("/order", async (req, res) => {
   try {
+    if (isDebugMode()) console.log('Starting /order route');
+    
     if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
     if (!ORDER_PATH) return res.status(500).json({ error: "ORDER_PATH not configured" });
 
@@ -29,8 +32,6 @@ router.get("/order", async (req, res) => {
       get: ["Order", "Admissions"],
       objectName: "myOrder"
     };
-
-    console.log('Fetching order details with payload:', payload);
 
     const response = await fetch(url, {
       method: "POST",
@@ -49,8 +50,6 @@ router.get("/order", async (req, res) => {
     }
 
     const responseText = await response.text();
-    console.log('Order details response status:', response.status);
-    console.log('Order details response text:', responseText);
 
     let responseData;
     try {
@@ -60,7 +59,7 @@ router.get("/order", async (req, res) => {
     }
 
     if (!response.ok) {
-      console.error('AudienceView API error:', responseData);
+      if (isDebugMode()) console.log('Order details fetch failed:', response.status);
       return res.status(response.status).json({
         error: "Failed to fetch order details",
         details: responseData
@@ -70,7 +69,7 @@ router.get("/order", async (req, res) => {
     // Extract order information from response
     const orderData = responseData?.data?.Order || {};
     
-    console.log('Order details fetched successfully:', orderData);
+    if (isDebugMode()) console.log('Order details fetched successfully');
 
     res.json({
       success: true,
@@ -80,7 +79,7 @@ router.get("/order", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Error in /order:", err);
+    if (isDebugMode()) console.log("Error in /order:", err.message);
     res.status(500).json({ 
       error: String(err?.message || err) 
     });
@@ -90,6 +89,8 @@ router.get("/order", async (req, res) => {
 // GET /details -> Retrieve payment details from AudienceView
 router.get("/details", async (req, res) => {
   try {
+    if (isDebugMode()) console.log('Starting /details route');
+    
     if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
     if (!ORDER_PATH) return res.status(500).json({ error: "ORDER_PATH not configured" });
     const url = new URL(ORDER_PATH, API_BASE).toString();
@@ -98,8 +99,6 @@ router.get("/details", async (req, res) => {
       get: ["Payments"],
       objectName: "myOrder"
     };
-
-    console.log('Fetching payment details with payload:', payload);
     const r = await fetch(url, {
       method: "POST",
       headers: {
@@ -114,21 +113,23 @@ router.get("/details", async (req, res) => {
     let data;
     try { data = JSON.parse(raw); } catch { 
       // Always return JSON, even if parsing fails
+      if (isDebugMode()) console.log("Payment details fetch failed: Invalid JSON");
       return res.status(500).json({ error: "Invalid JSON from upstream", raw });
     }
     if (!r.ok) {
+      if (isDebugMode()) console.log('Payment details fetch failed:', r.status);
       return res.status(r.status).json({ error: "Failed to fetch payment details", details: data });
     }
 
+    if (isDebugMode()) console.log('Payment details fetched successfully');
     res.json({
       success: true,
       payments: data?.data?.Payments || {},
       rawResponse: data
     });
-    console.log(raw);
 
   } catch (err) {
-    console.error("Error in /details:", err);
+    if (isDebugMode()) console.log("Error in /details:", err.message);
     res.status(500).json({
       error: String(err?.message || err)
     });

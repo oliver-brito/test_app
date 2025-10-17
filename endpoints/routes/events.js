@@ -7,6 +7,7 @@ import { CURRENT_SESSION } from "../utils/sessionStore.js";
 import { filterCookieHeader, parseSetCookieHeader, mergeCookiePairs } from "../utils/cookieUtils.js";
 import { getCookies, setCookies } from "../utils/sessionStore.js";
 import { authHeaders } from "../utils/authHeaders.js";
+import { isDebugMode } from "../utils/debug.js";
 
 // Setup environment variables
 const __filename = fileURLToPath(import.meta.url);
@@ -20,14 +21,13 @@ const router = express.Router();
 
 // GET /events/upcoming -> calls process.env.UPCOMING_PATH with Session + Cookie
 router.get("/events/upcoming", async (_req, res) => {
-  console.log("Received /events/upcoming request");
   try {
+    if (isDebugMode()) console.log("Starting /events/upcoming route");
+    
     if (!CURRENT_SESSION) {
-      console.log("No current session found: ", CURRENT_SESSION);
       return res.status(401).json({ error: "Not authenticated" });
     }
     if (!process.env.UPCOMING_PATH){
-      console.log("No UPCOMING_PATH configured: ", process.env.UPCOMING_PATH);
       return res.status(500).json({ error: "UPCOMING_PATH not configured" });
     }
 
@@ -61,7 +61,6 @@ router.get("/events/upcoming", async (_req, res) => {
       body: JSON.stringify(payload)
     };
 
-    console.log("Calling Upcoming API at:", url, "with payload:", payload);
     const r = await fetch(url, requestOptions);
 
     // 🥐 capture & merge any cookies the endpoint sets (Cloudflare, etc.)
@@ -76,22 +75,22 @@ router.get("/events/upcoming", async (_req, res) => {
     let data; try { data = JSON.parse(rawText); } catch { data = rawText; }
 
     if (!r.ok) {
-      console.error("[UPCOMING] status", r.status, r.statusText);
-      console.error("[UPCOMING] body", data);
+      if (isDebugMode()) console.log("Events upcoming fetch failed:", r.status);
       return res.status(r.status).json({ error: "Upcoming failed", details: data });
     }
 
     // Some AV stacks return 200 with an error payload—guard that:
     if (data?.errorCode || /error/i.test(data?.message || "")) {
-      console.error("[UPCOMING] soft error", data);
+      if (isDebugMode()) console.log("Events upcoming soft error");
       return res.status(400).json({ error: "Upstream error", details: data });
     }
 
     const resultsObj = data?.data?.SearchResults || {};
     const events = Object.values(resultsObj);
+    if (isDebugMode()) console.log("Events upcoming fetched successfully");
     res.json({ events });
   } catch (err) {
-    console.error("Error in /events/upcoming:", err);
+    if (isDebugMode()) console.log("Error in /events/upcoming:", err.message);
     res.status(500).json({ error: String(err?.message || err) });
   }
 });
@@ -99,6 +98,8 @@ router.get("/events/upcoming", async (_req, res) => {
 // POST /map/availability/:performanceId  -> calls AV map.loadAvailability
 router.post("/map/availability/:id", async (req, res) => {
   try {
+    if (isDebugMode()) console.log("Starting /map/availability route");
+    
     if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
     if (!ORDER_PATH) return res.status(500).json({ error: "ORDER_PATH not configured" });
 
@@ -143,12 +144,14 @@ router.post("/map/availability/:id", async (req, res) => {
     let data; try { data = JSON.parse(raw); } catch { data = raw; }
 
     if (!r.ok) {
+      if (isDebugMode()) console.log("Map availability fetch failed:", r.status);
       return res.status(r.status).json({ error: "getBestAvailable failed", details: data });
     }
 
+    if (isDebugMode()) console.log("Map availability fetched successfully");
     res.json(data);
   } catch (err) {
-    console.error("Error in /map/availability:", err);
+    if (isDebugMode()) console.log("Error in /map/availability:", err.message);
     res.status(500).json({ error: String(err?.message || err) });
   }
 });
@@ -158,6 +161,8 @@ router.post("/map/availability/:id", async (req, res) => {
 // GET /events/:id -> AV performance.load
 router.get("/events/:id", async (req, res) => {
   try {
+    if (isDebugMode()) console.log("Starting /events/:id route");
+    
     if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
 
     const performanceId = req.params.id;
@@ -194,18 +199,22 @@ router.get("/events/:id", async (req, res) => {
     let data; try { data = JSON.parse(raw); } catch { data = raw; }
 
     if (!r.ok) {
+      if (isDebugMode()) console.log("Performance load failed:", r.status);
       return res.status(r.status).json({ error: "performance.load failed", details: data });
     }
 
     // AV usually returns { data: { Performance: {...fields...} } }
     const perf = data?.data?.Performance;
     if (!perf) {
+      if (isDebugMode()) console.log("Performance not found");
       return res.status(404).json({ error: "Performance not found", details: data });
     }
 
     // return the object as-is; your front-end expects { name: {standard}, ... }
+    if (isDebugMode()) console.log("Performance loaded successfully");
     res.json(perf);
   } catch (err) {
+    if (isDebugMode()) console.log("Error in /events/:id:", err.message);
     res.status(500).json({ error: String(err?.message || err) });
   }
 });
@@ -213,6 +222,8 @@ router.get("/events/:id", async (req, res) => {
 // POST /map/pricing/:id -> AV map.loadMap (get pricing only)
 router.post("/map/pricing/:id", async (req, res) => {
   try {
+    if (isDebugMode()) console.log("Starting /map/pricing route");
+    
     if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
     if (!MAP_PATH) return res.status(500).json({ error: "MAP_PATH not configured" });
 
@@ -249,10 +260,15 @@ router.post("/map/pricing/:id", async (req, res) => {
     const raw = await r.text();
     let data; try { data = JSON.parse(raw); } catch { data = raw; }
     const pricetypes = data?.data?.pricetypes;
-    if (!r.ok) return res.status(r.status).json({ error: "loadMap(pricing) failed", details: data });
+    if (!r.ok) {
+      if (isDebugMode()) console.log("Map pricing fetch failed:", r.status);
+      return res.status(r.status).json({ error: "loadMap(pricing) failed", details: data });
+    }
 
+    if (isDebugMode()) console.log("Map pricing fetched successfully");
     res.json({ pricetypes });
   } catch (err) {
+    if (isDebugMode()) console.log("Error in /map/pricing:", err.message);
     res.status(500).json({ error: String(err?.message || err) });
   }
 });

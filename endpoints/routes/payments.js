@@ -7,6 +7,7 @@ import { authHeaders } from "../utils/authHeaders.js";
 import { parseSetCookieHeader, mergeCookiePairs } from "../utils/cookieUtils.js";
 import { getCookies, setCookies } from "../utils/sessionStore.js";
 import { CURRENT_SESSION } from "../utils/sessionStore.js";
+import { isDebugMode } from "../utils/debug.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,11 +26,12 @@ const {
 // POST /transaction -> Process payment transaction via AudienceView API
 router.post("/transaction", express.json(), async (req, res) => {
   try {
+    if (isDebugMode()) console.log("Starting /transaction route");
+    
     if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
     if (!ORDER_PATH) return res.status(500).json({ error: "ORDER_PATH not configured" });
 
     const { paymentData, orderData, paymentID } = req.body || {};
-    console.log('Processing transaction with data:', { paymentData, orderData, paymentID });
 
     const url = new URL(ORDER_PATH, API_BASE).toString();
 
@@ -55,9 +57,6 @@ router.post("/transaction", express.json(), async (req, res) => {
       objectName: "myOrder"
     };
 
-
-    console.log('Calling AudienceView order insert with payload:', payload);
-
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -70,7 +69,6 @@ router.post("/transaction", express.json(), async (req, res) => {
 
     const responseText = await response.text();
     // console.log('AudienceView response status:', response.status);
-    console.log('AudienceView response text:', responseText);
 
     let responseData;
     try {
@@ -80,7 +78,7 @@ router.post("/transaction", express.json(), async (req, res) => {
     }
 
     if (!response.ok) {
-      console.error('AudienceView API error:', responseData);
+      if (isDebugMode()) console.log("Transaction failed:", response.status);
       return res.status(response.status).json({
         success: false,
         error: "Transaction failed",
@@ -99,6 +97,7 @@ router.post("/transaction", express.json(), async (req, res) => {
     // Generate mock transaction ID for display purposes
     const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
     
+    if (isDebugMode()) console.log("Transaction completed successfully");
     // Redirect to success page with transaction details
     res.json({
       success: true,
@@ -115,7 +114,7 @@ router.post("/transaction", express.json(), async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Error in /transaction:", err);
+    if (isDebugMode()) console.log("Error in /transaction:", err.message);
     res.status(500).json({ 
       success: false,
       error: String(err?.message || err) 
@@ -126,6 +125,8 @@ router.post("/transaction", express.json(), async (req, res) => {
 // Real checkout endpoint: calls AV order API with addPayment
 router.post("/checkout", express.json(), async (req, res) => {
   try {
+    if (isDebugMode()) console.log("Starting /checkout route");
+    
     if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
     if (!ORDER_PATH) return res.status(500).json({ error: "ORDER_PATH not configured" });
 
@@ -147,7 +148,6 @@ router.post("/checkout", express.json(), async (req, res) => {
       get: ["Order::order_number", "Payments"],
       objectName: "myOrder"
     };
-    console.log('Adding customer to order:', payloadCustomer);
     const rCustomer = await fetch(url, {
       method: "POST",
       headers: {
@@ -159,9 +159,8 @@ router.post("/checkout", express.json(), async (req, res) => {
     });
     const rawCustomer = await rCustomer.text();
     let dataCustomer; try { dataCustomer = JSON.parse(rawCustomer); } catch { dataCustomer = rawCustomer; }
-    console.log('addCustomer response status:', rCustomer.status);
-    console.log('addCustomer response:', dataCustomer);
     if (!rCustomer.ok) {
+      if (isDebugMode()) console.log("Checkout failed at addCustomer:", rCustomer.status);
       return res.status(rCustomer.status).json({ error: "Checkout failed (addCustomer)", details: dataCustomer });
     }
 
@@ -215,6 +214,7 @@ router.post("/checkout", express.json(), async (req, res) => {
       const rawPayment = await rPayment.text();
       try { dataPayment = JSON.parse(rawPayment); } catch { dataPayment = rawPayment; }
       if (!rPayment.ok) {
+        if (isDebugMode()) console.log("Checkout failed at addPayment:", rPayment.status);
         return res.status(rPayment.status).json({ error: "Checkout failed (addPayment)", details: dataPayment });
       }
       paymentsObj = dataPayment?.data?.Payments || {};
@@ -248,8 +248,6 @@ router.post("/checkout", express.json(), async (req, res) => {
       get: ["Order::order_number", "Payments"],
       objectName: "myOrder"
     };
-
-    console.log('Setting delivery and payment method:', payload2.set);
     const r2 = await fetch(url, {
       method: "POST",
       headers: {
@@ -262,6 +260,7 @@ router.post("/checkout", express.json(), async (req, res) => {
     const raw2 = await r2.text();
     let data2; try { data2 = JSON.parse(raw2); } catch { data2 = raw2; }
     if (!r2.ok) {
+      if (isDebugMode()) console.log("Checkout failed at set delivery/payment:", r2.status);
       return res.status(r2.status).json({ error: "Checkout failed (set delivery/payment)", details: data2 });
     }
 
@@ -291,7 +290,7 @@ router.post("/checkout", express.json(), async (req, res) => {
     const raw3 = await r3.text();
     let data3; try { data3 = JSON.parse(raw3); } catch { data3 = raw3; }
     const csp3 = r3.headers.get("content-security-policy");
-    console.log(raw3);
+    
     // Step 4: get Payments::payment_id
     const payload4 = {
       get: [ `Payments::${paymentID}` ],
@@ -309,9 +308,10 @@ router.post("/checkout", express.json(), async (req, res) => {
     const raw4 = await r4.text();
     let data4; try { data4 = JSON.parse(raw4); } catch { data4 = raw4; }
     // Return all steps for debugging
+    if (isDebugMode()) console.log("Checkout completed successfully");
     res.json({ payment_details: data4.data?.[`Payments::${paymentID}`] });
   } catch (err) {
-    console.error("Error in /checkout:", err);
+    if (isDebugMode()) console.log("Error in /checkout:", err.message);
     res.status(500).json({ error: String(err?.message || err) });
   }
 });
@@ -328,17 +328,13 @@ router.post("/getPaymentClientConfig", async (req, res) => {
 
 async function handlePaymentConfig(req, res) {
   try {
-    const { paymentMethodId, eventId, paymentID } = req.body || {};
+    if (isDebugMode()) console.log("Starting /getPaymentClientConfig route");
     
-    console.log('Payment config requested with context:', {
-      paymentMethodId,
-      eventId, 
-      paymentID
-    });
+    const { paymentMethodId, eventId, paymentID } = req.body || {};
     
     // Check if we have a payment method ID to work with
     if (!paymentMethodId) {
-      console.warn('No paymentMethodId provided, using fallback config');
+      if (isDebugMode()) console.log("No paymentMethodId provided, using fallback config");
       return res.json({
         environment: 'test',
         clientKey: 'test_7REK4YQWRZB2DPRS7RNTFTGX2MPKY4SQ',
@@ -349,7 +345,7 @@ async function handlePaymentConfig(req, res) {
 
     // Make the call to AudienceView paymentMethod API
     if (!CURRENT_SESSION) {
-      console.warn('No active session, using fallback config');
+      if (isDebugMode()) console.log("No active session, using fallback config");
       return res.json({
         environment: 'test',
         clientKey: 'test_7REK4YQWRZB2DPRS7RNTFTGX2MPKY4SQ',
@@ -372,9 +368,6 @@ async function handlePaymentConfig(req, res) {
       objectName: "myPaymentMethod"
     };
 
-    console.log('Calling AudienceView paymentMethod API:', paymentMethodUrl);
-    console.log('Payload:', JSON.stringify(payload, null, 2));
-
     const response = await fetch(paymentMethodUrl, {
       method: "POST",
       headers: {
@@ -386,19 +379,16 @@ async function handlePaymentConfig(req, res) {
     });
 
     const responseText = await response.text();
-    console.log('PaymentMethod API response status:', response.status);
-    console.log('PaymentMethod API response:', responseText);
 
     let responseData;
     try {
       responseData = JSON.parse(responseText);
     } catch (e) {
-      console.error('Failed to parse paymentMethod API response:', e);
       responseData = responseText;
     }
 
     if (!response.ok) {
-      console.error('PaymentMethod API error:', responseData);
+      if (isDebugMode()) console.log("Payment client config fetch failed:", response.status);
       // Fall back to default config on API error
       return res.json({
         environment: 'test',
@@ -418,8 +408,6 @@ async function handlePaymentConfig(req, res) {
         const parsedConfig = JSON.parse(configJson);
         const adyenConfig = parsedConfig?.config;
         
-        console.log('Parsed Adyen config:', adyenConfig);
-        
         if (adyenConfig) {
           // Extract Adyen configuration
           const clientConfig = {
@@ -436,16 +424,16 @@ async function handlePaymentConfig(req, res) {
             rawConfig: adyenConfig
           };
           
+          if (isDebugMode()) console.log("Payment client config fetched successfully");
           return res.json(clientConfig);
         }
       }
       
       // If we can't parse the expected structure, log and fall back
-      console.warn('Unexpected API response structure, using fallback config');
-      console.warn('Response data:', responseData);
+      if (isDebugMode()) console.log("Unexpected API response structure, using fallback config");
       
     } catch (parseError) {
-      console.error('Error parsing AudienceView config response:', parseError);
+      if (isDebugMode()) console.log("Error parsing AudienceView config response");
     }
     
     // Fallback configuration
@@ -459,7 +447,7 @@ async function handlePaymentConfig(req, res) {
     });
     
   } catch (err) {
-    console.error("Error in handlePaymentConfig:", err);
+    if (isDebugMode()) console.log("Error in handlePaymentConfig:", err.message);
     // Always fall back to working config on error
     res.json({
       environment: 'test',
@@ -477,9 +465,9 @@ async function handlePaymentConfig(req, res) {
 
 router.post("/getPaymentResponse", async (req, res) => {
   try {
-    const { paymentID } = req.body || {};
+    if (isDebugMode()) console.log("Starting /getPaymentResponse route");
     
-    console.log('Payment response requested for paymentID:', paymentID);
+    const { paymentID } = req.body || {};
     
     // Check authentication
     if (!CURRENT_SESSION) {
@@ -506,9 +494,6 @@ router.post("/getPaymentResponse", async (req, res) => {
       objectName: "myOrder"
     };
 
-    console.log('Calling AudienceView order API for payment response:', url);
-    console.log('Payload:', JSON.stringify(payload, null, 2));
-
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -520,14 +505,11 @@ router.post("/getPaymentResponse", async (req, res) => {
     });
 
     const responseText = await response.text();
-    console.log('Payment response API status:', response.status);
-    console.log('Payment response API response:', responseText);
 
     let responseData;
     try {
       responseData = JSON.parse(responseText);
     } catch (e) {
-      console.error('Failed to parse payment response API response:', e);
       return res.status(500).json({ 
         error: "Invalid response from payment API",
         details: responseText
@@ -535,7 +517,7 @@ router.post("/getPaymentResponse", async (req, res) => {
     }
 
     if (!response.ok) {
-      console.error('Payment response API error:', responseData);
+      if (isDebugMode()) console.log("Payment response fetch failed:", response.status);
       return res.status(response.status).json({
         error: "Failed to fetch payment gateway config",
         details: responseData
@@ -546,7 +528,7 @@ router.post("/getPaymentResponse", async (req, res) => {
     const gatewayConfig = responseData?.data?.[`Payments::${paymentID}::paymentmethod_gateway_config`];
     
     if (!gatewayConfig) {
-      console.warn('No payment gateway config found in response');
+      if (isDebugMode()) console.log("No payment gateway config found in response");
       return res.status(404).json({
         error: "Payment gateway config not found",
         paymentID: paymentID,
@@ -554,16 +536,14 @@ router.post("/getPaymentResponse", async (req, res) => {
       });
     }
 
-    console.log('Payment gateway config retrieved:', gatewayConfig);
-
     // Parse the payment methods from the JSON string in the standard field
     try {
       const paymentMethodsJson = gatewayConfig.standard || gatewayConfig.display || gatewayConfig.input;
       
       if (paymentMethodsJson) {
         const paymentMethodsConfig = JSON.parse(paymentMethodsJson);
-        console.log('Parsed payment methods config:', paymentMethodsConfig);
         
+        if (isDebugMode()) console.log("Payment response fetched successfully");
         res.json({
           success: true,
           paymentID: paymentID,
@@ -572,7 +552,7 @@ router.post("/getPaymentResponse", async (req, res) => {
           rawResponse: responseData
         });
       } else {
-        console.warn('No payment methods JSON found in gateway config');
+        if (isDebugMode()) console.log("No payment methods JSON found in gateway config");
         res.json({
           success: true,
           paymentID: paymentID,
@@ -583,8 +563,7 @@ router.post("/getPaymentResponse", async (req, res) => {
       }
       
     } catch (parseError) {
-      console.error('Error parsing payment methods JSON:', parseError);
-      console.error('JSON string was:', gatewayConfig.standard);
+      if (isDebugMode()) console.log("Error parsing payment methods JSON");
       
       res.json({
         success: true,
@@ -596,7 +575,7 @@ router.post("/getPaymentResponse", async (req, res) => {
     }
 
   } catch (err) {
-    console.error("Error in /getPaymentResponse:", err);
+    if (isDebugMode()) console.log("Error in /getPaymentResponse:", err.message);
     res.status(500).json({ 
       error: String(err?.message || err) 
     });
@@ -607,12 +586,12 @@ router.post("/getPaymentResponse", async (req, res) => {
 // it will set the external_payment_data as provided, then call insert to complete the transaction
 router.post("/processAdyenPayment", async (req, res) => {
   try {
+    if (isDebugMode()) console.log("Starting /processAdyenPayment route");
+    
     if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
     if (!ORDER_PATH) return res.status(500).json({ error: "ORDER_PATH not configured" });
 
     const { externalData, paymentID } = req.body || {};
-    
-    console.log('Processing Adyen payment with data:', { externalData, paymentID });
     
     if (!externalData) {
       return res.status(400).json({ 
@@ -639,9 +618,6 @@ router.post("/processAdyenPayment", async (req, res) => {
       get: ["Payments"]
     };
 
-    console.log('Calling AudienceView order API to set external payment data:', url);
-    console.log('Payload:', JSON.stringify(payload, null, 2));
-
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -660,14 +636,11 @@ router.post("/processAdyenPayment", async (req, res) => {
     }
 
     const responseText = await response.text();
-    console.log('Adyen payment processing response status:', response.status);
-    console.log('Adyen payment processing response:', responseText);
 
     let responseData;
     try {
       responseData = JSON.parse(responseText);
     } catch (e) {
-      console.error('Failed to parse Adyen payment response:', e);
       return res.status(500).json({
         error: "Invalid response from payment API",
         details: responseText
@@ -675,7 +648,7 @@ router.post("/processAdyenPayment", async (req, res) => {
     }
 
     if (!response.ok) {
-      console.error('Adyen payment API error:', responseData);
+      if (isDebugMode()) console.log("Adyen payment processing failed:", response.status);
       return res.status(response.status).json({
         error: "Failed to process Adyen payment",
         details: responseData
@@ -690,12 +663,8 @@ router.post("/processAdyenPayment", async (req, res) => {
     const externalPaymentDataSet = paymentRecord?.external_payment_data?.standard;
     const externalDataMatches = externalPaymentDataSet === externalData;
     
-    console.log('Adyen payment processing completed');
-    console.log('Expected external data:', externalData);
-    console.log('Actual external data in response:', externalPaymentDataSet);
-    console.log('External data set successfully:', externalDataMatches);
-
     if (!externalDataMatches) {
+      if (isDebugMode()) console.log("Adyen payment data verification failed");
       return res.json({
         success: false,
         paymentID: paymentID,
@@ -709,8 +678,6 @@ router.post("/processAdyenPayment", async (req, res) => {
     }
 
     // Step 2: If external data was set successfully, call the insert endpoint to complete the payment
-    console.log('External data verified successfully, proceeding to complete transaction...');
-    
     const transactionPayload = {
       actions: [
         {
@@ -729,8 +696,6 @@ router.post("/processAdyenPayment", async (req, res) => {
       objectName: "myOrder"
     };
 
-    console.log('Calling AudienceView order insert to complete transaction:', transactionPayload);
-
     const transactionResponse = await fetch(url, {
       method: "POST",
       headers: {
@@ -742,14 +707,11 @@ router.post("/processAdyenPayment", async (req, res) => {
     });
 
     const transactionResponseText = await transactionResponse.text();
-    console.log('Transaction completion response status:', transactionResponse.status);
-    console.log('Transaction completion response:', transactionResponseText);
 
     let transactionData;
     try {
       transactionData = JSON.parse(transactionResponseText);
     } catch (e) {
-      console.error('Failed to parse transaction completion response:', e);
       return res.status(500).json({
         success: false,
         error: "Invalid response from transaction completion",
@@ -760,7 +722,7 @@ router.post("/processAdyenPayment", async (req, res) => {
     }
 
     if (!transactionResponse.ok) {
-      console.error('Transaction completion API error:', transactionData);
+      if (isDebugMode()) console.log("Transaction completion failed:", transactionResponse.status);
       return res.status(transactionResponse.status).json({
         success: false,
         error: "Failed to complete transaction after setting external data",
@@ -774,12 +736,10 @@ router.post("/processAdyenPayment", async (req, res) => {
     const orderNumber = transactionData?.data?.["Order::order_number"]?.standard;
     const finalPayments = transactionData?.data?.Payments || {};
     
-    console.log('Transaction completed successfully');
-    console.log('Order number:', orderNumber);
-
     // Generate transaction ID for display purposes
     const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
     
+    if (isDebugMode()) console.log("Adyen payment processed successfully");
     res.json({
       success: true,
       paymentID: paymentID,
@@ -807,7 +767,7 @@ router.post("/processAdyenPayment", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Error in /processAdyenPayment:", err);
+    if (isDebugMode()) console.log("Error in /processAdyenPayment:", err.message);
     res.status(500).json({ 
       error: String(err?.message || err) 
     });
