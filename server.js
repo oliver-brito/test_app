@@ -14,23 +14,29 @@ app.use(express.json({ limit: "1mb" }));
 
 // Add security headers including CSP
 app.use((req, res, next) => {
-  // Allow frames from any origin for hosted payment fields
-  res.setHeader('Content-Security-Policy', 
-    "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' https: http:; " +
-    "style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data: https: http:; " +
-    "connect-src 'self' https: http:; " +
-    "frame-src 'self' https: http:; " +
-    "frame-ancestors 'self' https: http:; " +
-    "child-src 'self' https: http:;"
+  res.setHeader(
+    "Content-Security-Policy",
+    [
+      "default-src 'self';",
+      // ✅ Allow Adyen JS
+      "script-src 'self' 'unsafe-inline' https://checkoutshopper-test.adyen.com;",
+      // ✅ Allow Adyen CSS
+      "style-src 'self' 'unsafe-inline' https://checkoutshopper-test.adyen.com;",
+      // ✅ Allow images and fonts from Adyen
+      "img-src 'self' data: https://checkoutshopper-test.adyen.com;",
+      "font-src 'self' data: https://checkoutshopper-test.adyen.com;",
+      // ✅ Allow XHR/fetch calls to Adyen
+      "connect-src 'self' https://checkoutshopper-test.adyen.com;",
+      // ✅ Allow Adyen iframes and hosted fields
+      "frame-src 'self' https://checkoutshopper-test.adyen.com;",
+      "frame-ancestors 'self' https://checkoutshopper-test.adyen.com;",
+      "child-src 'self' https://checkoutshopper-test.adyen.com;"
+    ].join(" ")
   );
-  
-  // Additional security headers
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  
+
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
   next();
 });
 
