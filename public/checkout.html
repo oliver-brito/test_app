@@ -547,18 +547,17 @@
     async function processThreeDSResponse() {
       try {
         const params = new URLSearchParams(window.location.search);
-        const resultCode = params.get('resultCode');
-        const redirectResult = params.get('redirectResult');
-        if (!resultCode && !redirectResult) return;
+        const paramsString = params.toString(); // e.g. "resultCode=...&redirectResult=..."
+        if (!paramsString) return;
 
-        // Send to server endpoint for processing (include paymentID)
+        // Send to server endpoint for processing: send full params string and paymentID
         const paymentID = window.paymentID || '';
-        const payload = { resultCode, redirectResult, paymentID };
-              const r = await fetch('/processThreeDSResponse', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-              });
+        const payload = { params: paramsString, paymentID };
+        const r = await fetch('/processThreeDSResponse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
 
         let json;
         try { json = await r.json(); } catch (e) { json = null; }

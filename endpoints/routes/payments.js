@@ -1030,33 +1030,37 @@ async function handleThreeDS(req, res, { paymentID, transactionData } = {}) {
 router.post('/processThreeDSResponse', express.json(), async (req, res) => {
   try {
     if (isDebugMode()) console.log('Starting /processThreeDSResponse route');
-    const { resultCode, redirectResult, paymentID } = req.body || {};
+    // Expecting { params: 'resultCode=...&redirectResult=...', paymentID: '...' }
+    const { params, paymentID } = req.body || {};
 
-    if (!resultCode && !redirectResult) {
-      return res.status(400).json({ success: false, error: 'Missing resultCode and redirectResult' });
+    if (!params || typeof params !== 'string' || params.trim() === '') {
+      return res.status(400).json({ success: false, error: 'Missing params string' });
     }
 
+    // paymentID is used to locate the payment record in AudienceView; if not provided we still proceed
     if (!paymentID) {
-      // We need a paymentID to set pa_response_information
-      return res.status(400).json({ success: false, error: 'Missing paymentID' });
+      if (isDebugMode()) console.log('No paymentID provided in /processThreeDSResponse; proceeding without paymentID.');
     }
 
-    // Build the pa_response_information payload similar to how pa_request_information is stored
-    const paResponseObj = {
-      resultCode: resultCode || null,
-      redirectResult: redirectResult || null,
-      receivedAt: new Date().toISOString()
-    };
+    // Store the raw params string as pa_response_information for the payment record
+    // Keep the stored value consistent with pa_request_information format (stringified JSON or raw string)
+    const paResponseValue = params; // store raw query string as-is
 
-    // Call AudienceView to set Payments::paymentID::pa_response_information
+    // Call AudienceView to set Payments::paymentID::pa_response_information if paymentID provided
     const url = new URL(ORDER_PATH, API_BASE).toString();
+
     const payload = {
-      set: {
-        [`Payments::${paymentID}::pa_response_information`]: JSON.stringify(paResponseObj)
-      },
+      set: {},
       objectName: 'myOrder',
       get: ['Payments']
     };
+
+    if (paymentID) {
+      payload.set[`Payments::${paymentID}::pa_response_information`] = paResponseValue;
+    } else {
+      // If no paymentID provided, set a top-level field so we can still record the value for debugging
+      payload.set[`Payments::unknown_payment::pa_response_information`] = paResponseValue;
+    }
 
     const r = await fetch(url, {
       method: 'POST',
@@ -1084,10 +1088,81 @@ router.post('/processThreeDSResponse', express.json(), async (req, res) => {
       return res.status(r.status).json({ success: false, error: 'Failed to set pa_response_information', details: data });
     }
 
-    // If the AudienceView response indicates 3DS or other actions are still required, return that info
-    // For now, treat success as completed and return a redirect to viewOrder
-    const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2,6).toUpperCase()}`;
-    return res.json({ success: true, message: 'pa_response_information set', redirectUrl: `/viewOrder.html?transactionId=${transactionId}`, rawResponse: data });
+    // After setting pa_response_information, trigger the insert transaction (same as /transaction)
+    try {
+      const transactionPayload = {
+        actions: [
+          {
+            method: 'insert',
+            params: { notification: 'correspondence' },
+            acceptWarnings: [5008, 4224, 5388]
+          }
+        ],
+        get: ['Order::order_number', 'Payments'],
+        objectName: 'myOrder'
+      };
+
+      const transactionResponse = await fetch(url, {
+        method: 'POST',
+        headers: {
+          ...authHeaders(),
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(transactionPayload)
+      });
+
+      const transactionResponseText = await transactionResponse.text();
+      let transactionData;
+      try { transactionData = JSON.parse(transactionResponseText); } catch (e) { transactionData = transactionResponseText; }
+
+      const is3dsRequired_transaction = (dataToCheck) => {
+        try { return JSON.stringify(dataToCheck || '').indexOf('4294') !== -1; } catch (e) { return false; }
+      };
+
+      if (!transactionResponse.ok) {
+        if (is3dsRequired_transaction(transactionData)) {
+          if (isDebugMode()) console.log('Transaction completion indicates 3DS required (4294) after pa_response_information');
+          // delegate to handleThreeDS template
+          return await handleThreeDS(req, res, { paymentID, transactionData });
+        }
+
+        if (isDebugMode()) console.log('Transaction completion failed after pa_response_information:', transactionResponse.status);
+        return res.status(transactionResponse.status).json({
+          success: false,
+          error: 'Failed to complete transaction after setting pa_response_information',
+          details: transactionData
+        });
+      }
+
+      // Success: extract order and payments
+      const orderNumber = transactionData?.data?.['Order::order_number']?.standard;
+      const finalPayments = transactionData?.data?.Payments || {};
+
+      const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2,6).toUpperCase()}`;
+
+      return res.json({
+        success: true,
+        paymentID: paymentID || null,
+        transactionCompleted: true,
+        orderId: orderNumber,
+        transactionId: transactionId,
+        redirectUrl: `/viewOrder.html?orderId=${orderNumber || transactionId}&transactionId=${transactionId}`,
+        transactionDetails: {
+          success: true,
+          transactionId: transactionId,
+          orderId: orderNumber || transactionId,
+          timestamp: new Date().toISOString(),
+          status: 'completed',
+          audienceViewResponse: transactionData
+        },
+        payments: finalPayments,
+        rawResponse: transactionData
+      });
+    } catch (err2) {
+      if (isDebugMode()) console.log('Error completing transaction after pa_response_information:', err2?.message || err2);
+      return res.status(500).json({ success: false, error: 'Transaction after pa_response_information failed', details: String(err2?.message || err2) });
+    }
 
   } catch (err) {
     if (isDebugMode()) console.log('Error in /processThreeDSResponse:', err?.message || err);

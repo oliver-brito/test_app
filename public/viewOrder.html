@@ -67,6 +67,8 @@
           contentDiv.innerHTML = `
             <div class="error">
               Invalid order information. Please check your confirmation email or contact support.
+            ${urlParams.toString()}  
+            ${JSON.stringify(req.body)}
             </div>
           `;
           return;
@@ -315,6 +317,8 @@
         contentDiv.innerHTML = `
           <div class="error">
             Unable to load order details from server: ${error.message}. Please contact support with your transaction ID.
+            ${urlParams.toString()}
+            ${JSON.stringify(req.body)}
           </div>
         `;
       }
