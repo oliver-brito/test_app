@@ -721,7 +721,17 @@ router.post("/processAdyenPayment", async (req, res) => {
       });
     }
 
+    const is3dsRequired_transaction = (data) => {
+      try { return JSON.stringify(data || '').indexOf('4294') !== -1; } catch (e) { return false; }
+    };
+
     if (!transactionResponse.ok) {
+      if (is3dsRequired_transaction(transactionData)) {
+        if (isDebugMode()) console.log('Transaction completion indicates 3DS required (4294)');
+        // delegate to handleThreeDS template
+        return await handleThreeDS(req, res, { paymentID, transactionData });
+      }
+
       if (isDebugMode()) console.log("Transaction completion failed:", transactionResponse.status);
       return res.status(transactionResponse.status).json({
         success: false,
@@ -864,4 +874,223 @@ router.post("/getPaymentMethodType", async (req, res) => {
     });
   }
 });
+
+// endpoint /checkPaResponseInformation
+router.post("/checkPaResponseInformation", async (req, res) => {
+  try {
+    if (isDebugMode()) console.log("Starting /checkPaResponseInformation route");
+
+    if (!CURRENT_SESSION) return res.status(401).json({ error: "Not authenticated" });
+    if (!ORDER_PATH) return res.status(500).json({ error: "ORDER_PATH not configured" });
+
+    const { paymentID } = req.body || {};
+
+    if (!paymentID) {
+      return res.status(400).json({
+        error: "Missing paymentID",
+        message: "paymentID is required to check PA response information"
+      });
+    }
+
+    // Fetch pa_response_information for this payment and parse it similar to pa_request_information
+    const url = new URL(ORDER_PATH, API_BASE).toString();
+    const payload = {
+      get: [ `Payments::${paymentID}::pa_response_information` ],
+      objectName: 'myOrder'
+    };
+
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...authHeaders(),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const text = await r.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = text; }
+
+    // Extract pa_response_information object (standard/input/display)
+    const paObj = data?.data?.[`Payments::${paymentID}::pa_response_information`];
+    let paJsonStr = paObj?.standard || paObj?.input || paObj?.display || null;
+    let paInfo = null;
+    if (paJsonStr) {
+      try {
+        paInfo = JSON.parse(paJsonStr);
+      } catch (e) {
+        // if it's a stringified JSON inside quotes, try a second parse
+        try { paInfo = JSON.parse(JSON.parse(paJsonStr)); } catch { paInfo = paJsonStr; }
+      }
+    }
+
+    // Return parsed pa_response_information
+    if (!r.ok) {
+      if (isDebugMode()) console.log("Failed to fetch pa_response_information:", r.status);
+      return res.status(r.status).json({
+        success: false,
+        error: 'Failed to fetch pa_response_information',
+        paymentID,
+        rawResponse: data
+      });
+    }
+
+    // If paInfo contains an action/paRequestInfo for the client, return it in a shape the client expects
+    if (paInfo) {
+      if (isDebugMode()) console.log('pa_response_information present, returning paRequestInfo action payload');
+      // Common fields for Adyen-like handleAction: action object may vary; return paInfo directly if it looks like an action
+      // Fallback: wrap in { paRequestInfo: paInfo }
+      const looksLikeAction = paInfo && (paInfo.type || paInfo.action || paInfo.paymentData || paInfo.redirect); 
+      const actionPayload = looksLikeAction ? paInfo : { paRequestInfo: paInfo };
+
+      return res.json({
+        success: false,
+        error: '3ds required',
+        code: 4294,
+        paymentID,
+        paRequestInfo: actionPayload,
+        paResponseInfo: paInfo,
+        rawResponse: data
+      });
+    }
+
+    return res.json({
+      success: true,
+      paymentID,
+      paResponseInfo: paInfo,
+      rawResponse: data
+    });
+
+  } catch (err) {
+    if (isDebugMode()) console.log("Error in /checkPaResponseInformation:", err.message);
+    res.status(500).json({
+      error: String(err?.message || err)
+    });
+  }
+});
+
 export default router;
+
+// Template handler for 3DS flow. Currently a no-op placeholder; extend as needed.
+async function handleThreeDS(req, res, { paymentID, transactionData } = {}) {
+  // Example template: call AudienceView to fetch pa_request_information for this payment and log it
+  if (isDebugMode()) console.log('handleThreeDS invoked for paymentID:', paymentID);
+
+  try {
+    const url = new URL(ORDER_PATH, API_BASE).toString();
+    const payload = {
+      get: [ `Payments::${paymentID}::pa_request_information` ],
+      objectName: 'myOrder'
+    };
+
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...authHeaders(),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const text = await r.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = text; }
+
+    // Extract pa_request_information object (standard/input/display)
+    const paObj = data?.data?.[`Payments::${paymentID}::pa_request_information`];
+    let paJsonStr = paObj?.standard || paObj?.input || paObj?.display || null;
+    let paInfo = null;
+    if (paJsonStr) {
+      try {
+        paInfo = JSON.parse(paJsonStr);
+      } catch (e) {
+        // if it's a stringified JSON inside quotes, try a second parse
+        try { paInfo = JSON.parse(JSON.parse(paJsonStr)); } catch { paInfo = paJsonStr; }
+      }
+    }
+    // Return standardized 3DS required response including parsed redirect info
+    return res.status(402).json({
+      success: false,
+      error: '3ds required',
+      code: 4294,
+      paymentID,
+      paRequestInfo: paInfo,
+      rawResponse: data
+    });
+  } catch (err) {
+    if (isDebugMode()) console.log('Error in handleThreeDS:', err?.message || err);
+    return res.status(500).json({ success: false, error: 'handleThreeDS error', details: String(err?.message || err) });
+  }
+}
+
+// Mock endpoint to receive 3DS responses from client and process them
+router.post('/processThreeDSResponse', express.json(), async (req, res) => {
+  try {
+    if (isDebugMode()) console.log('Starting /processThreeDSResponse route');
+    const { resultCode, redirectResult, paymentID } = req.body || {};
+
+    if (!resultCode && !redirectResult) {
+      return res.status(400).json({ success: false, error: 'Missing resultCode and redirectResult' });
+    }
+
+    if (!paymentID) {
+      // We need a paymentID to set pa_response_information
+      return res.status(400).json({ success: false, error: 'Missing paymentID' });
+    }
+
+    // Build the pa_response_information payload similar to how pa_request_information is stored
+    const paResponseObj = {
+      resultCode: resultCode || null,
+      redirectResult: redirectResult || null,
+      receivedAt: new Date().toISOString()
+    };
+
+    // Call AudienceView to set Payments::paymentID::pa_response_information
+    const url = new URL(ORDER_PATH, API_BASE).toString();
+    const payload = {
+      set: {
+        [`Payments::${paymentID}::pa_response_information`]: JSON.stringify(paResponseObj)
+      },
+      objectName: 'myOrder',
+      get: ['Payments']
+    };
+
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...authHeaders(),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    // Capture any cookies set by the endpoint
+    const setCookie = r.headers.get('set-cookie');
+    if (setCookie) {
+      const pairs = parseSetCookieHeader(setCookie);
+      setCookies(mergeCookiePairs(getCookies(), pairs));
+    }
+
+    const text = await r.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = text; }
+
+    if (!r.ok) {
+      if (isDebugMode()) console.log('Failed to set pa_response_information:', r.status);
+      return res.status(r.status).json({ success: false, error: 'Failed to set pa_response_information', details: data });
+    }
+
+    // If the AudienceView response indicates 3DS or other actions are still required, return that info
+    // For now, treat success as completed and return a redirect to viewOrder
+    const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2,6).toUpperCase()}`;
+    return res.json({ success: true, message: 'pa_response_information set', redirectUrl: `/viewOrder.html?transactionId=${transactionId}`, rawResponse: data });
+
+  } catch (err) {
+    if (isDebugMode()) console.log('Error in /processThreeDSResponse:', err?.message || err);
+    res.status(500).json({ success: false, error: String(err?.message || err) });
+  }
+});

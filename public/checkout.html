@@ -333,9 +333,11 @@
             if (result.success && result.redirectUrl) {
               // Redirect to confirmation page
               window.location.href = result.redirectUrl;
-            } else if (result.action) {
+            } else if (result.paRequestInfo) {
               // Handle additional action (3D Secure, etc.)
-              dropin.handleAction(result.action);
+              console.log('Handling additional action with paRequestInfo:', result.paRequestInfo);
+              dropin.handleAction(result.paRequestInfo);
+              console.log('Called dropin.handleAction with paRequestInfo');
             } else {
               throw new Error(result.error || 'Payment failed');
             }
@@ -383,8 +385,11 @@
               environment: paymentConfig.environment,
               clientKey: paymentConfig.clientKey,
               countryCode: paymentConfig.countryCode,
-              currency: paymentConfig.currency,
               paymentMethodsResponse: paymentMethodsResponse,
+              amount: {
+                value: Math.round(parseFloat(window.orderTotal || '0') * 100), // Amount in cents
+                currency: paymentConfig.currency
+              },
               onSubmit: (state, dropin) => {
                 handleAdyenSubmit(state, dropin);
               },
@@ -394,12 +399,29 @@
               onError: (error, dropin) => {
                 console.error('Adyen Drop-in error:', error);
                 alert('Payment error: ' + error.message);
+              },
+              onLoad: (state, dropin) => {
+                console.log('Adyen Drop-in loaded');
+                //call /checkPaResponseInformation
               }
             };
             const { AdyenCheckout, Dropin, Card, GooglePay, PayPal  } = window.AdyenWeb;
-            const checkout = await AdyenCheckout(configuration);
-            const dropin = new Dropin(checkout, {});
-            dropin.mount('#adyen-dropin-container');
+            // Expose Adyen Checkout and Dropin instances as globals so other scripts can access them
+            window.adyenCheckout = await AdyenCheckout(configuration);
+            const checkout = window.adyenCheckout;
+            // Payment method specific configuration must be passed to the Dropin (not the core)
+            const dropinOptions = {
+              paymentMethodsConfiguration: {
+                card: {
+                  hasHolderName: true,
+                  holderNameRequired: true,
+                  billingAddressRequired: true
+                }
+              }
+            };
+            // Expose dropin globally for debugging and external control
+            window.adyenDropin = new Dropin(checkout, dropinOptions);
+            window.adyenDropin.mount('#adyen-dropin-container');
           }catch (err) {
             console.error('Error initializing Adyen Drop-in:', err);
             resultDiv.innerHTML += `<div class="error">Error initializing Adyen Drop-in: ${err.message}</div>`;
@@ -503,7 +525,64 @@
       }
     }
 
-    doCheckout();
+    // Call doCheckout safely from non-module script: wrap in an async IIFE
+    (async function() {
+      try {
+        const result = doCheckout();
+        // Ensure we handle both Promise and non-Promise returns
+        if (result && typeof result.then === 'function') {
+          await result;
+        }
+        console.log('Checkout process completed.');
+        // Call 3DS response processing after checkout completes
+        processThreeDSResponse();
+      } catch (err) {
+        console.error('Error during checkout:', err);
+        // Still attempt to process 3DS response in case redirect params are present
+        try { processThreeDSResponse(); } catch (e) { /* ignore */ }
+      }
+    })();
+
+    // If the URL contains resultCode and redirectResult, POST them to server endpoint for 3DS processing.
+    async function processThreeDSResponse() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const resultCode = params.get('resultCode');
+        const redirectResult = params.get('redirectResult');
+        if (!resultCode && !redirectResult) return;
+
+        // Send to server endpoint for processing (include paymentID)
+        const paymentID = window.paymentID || '';
+        const payload = { resultCode, redirectResult, paymentID };
+              const r = await fetch('/processThreeDSResponse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+
+        let json;
+        try { json = await r.json(); } catch (e) { json = null; }
+
+        if (!r.ok) {
+          console.warn('/processThreeDSResponse failed', r.status, json);
+          alert('3DS processing failed on server: ' + (json?.error || r.status));
+          return;
+        }
+
+        // Show simple feedback to the user
+        if (json && json.success) {
+          alert('3DS processed: ' + (json.message || 'success'));
+          // Optionally redirect if server instructs
+          if (json.redirectUrl) window.location.href = json.redirectUrl;
+        } else {
+          alert('3DS processing response: ' + JSON.stringify(json));
+        }
+      } catch (err) {
+        console.warn('Error in processThreeDSResponse', err);
+      }
+    }
+
+  // NOTE: processThreeDSResponse() is invoked after checkout completes where paymentID is available.
 
     function handleSubmit(event) {
       event.preventDefault();
@@ -600,11 +679,11 @@
               paymentData: paymentData,
               paymentID: paymentID,
               orderData: {
-                eventId: localStorage.getItem('eventId'),
-                deliveryMethod: localStorage.getItem('deliveryMethod'),
-                paymentMethod: localStorage.getItem('paymentMethod'),
-                eventName: localStorage.getItem('eventName'),
-                eventDate: localStorage.getItem('eventDate')
+            eventId: localStorage.getItem('eventId'),
+            deliveryMethod: localStorage.getItem('deliveryMethod'),
+            paymentMethod: localStorage.getItem('paymentMethod'),
+            eventName: localStorage.getItem('eventName'),
+            eventDate: localStorage.getItem('eventDate')
               }
             })
           });
@@ -625,7 +704,7 @@
           } else {
             throw new Error(transactionResult.error || 'Transaction failed');
           }
-          
+
         } catch (error) {
           console.error('Transaction error:', error);
           showError(`Transaction failed: ${error.message}`);
