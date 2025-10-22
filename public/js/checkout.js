@@ -6,7 +6,6 @@ async function doCheckout() {
 	try {
 		const data = await window.fetchCheckoutData({ eventId, deliveryMethod, paymentMethod });
 		const payment_details = data.payment_details || {};
-		console.log(payment_details);
 		let pa_request_url = payment_details.pa_request_URL?.standard || '';
 		let conversationToken = payment_details.server_to_client_token?.standard || '';
 		let paymentID = payment_details.payment_id?.standard || '';

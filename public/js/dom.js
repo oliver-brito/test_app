@@ -9,31 +9,6 @@ window.getCheckoutContext = function() {
   };
 };
 
-window.hasUrlParams = function() {
-  return (window.location.search && window.location.search.length > 1) || (window.location.hash && window.location.hash.length > 1);
-};
-
-window.renderSharedInfoShort = function(resultDiv, { eventId, deliveryMethod, paymentMethod }, pa_request_url, conversationToken, paymentID) {
-  resultDiv.innerHTML = `\n            <div class="label">Event ID:</div><div class="value">${eventId}</div>\n            <div class="label">Delivery Method:</div><div class="value">${deliveryMethod}</div>\n            <div class="label">Payment Method:</div><div class="value">${paymentMethod}</div>\n            <div class="label">PA Request URL:</div><div class="value"><a href="${pa_request_url}" target="_blank">${pa_request_url}</a></div>\n            <div class="label">Conversation Token:</div><div class="value" id="conv-token-value">${conversationToken}</div>\n            <div class="label">Payment ID:</div><div class="value" id="payment-id-value">${paymentID}</div>\n            <button type="button" class="btn" id="change-info-btn" style="margin-bottom:16px; width:auto;">Change Info</button>\n          `;
-};
-
-window.initHostedFieldsShort = function(conversationToken, pa_request_url, resultDiv) {
-  if (window.HostedFieldsManager) {
-    try {
-      const hostedFieldsManager = new window.HostedFieldsManager();
-      window.currentHostedFieldsManager = hostedFieldsManager;
-      hostedFieldsManager.initializeHostedFields({
-        conversationToken: conversationToken,
-        paRequestUrl: pa_request_url,
-        resultContainer: resultDiv,
-        onStatusUpdate: () => {},
-        onError: (err) => { console.warn('HostedFieldsManager error (short-circuit):', err); }
-      });
-    } catch (err) {
-      console.warn('Failed to init hosted fields during short-circuit:', err);
-    }
-  }
-};
 
 window.allowOverrideFromHashMaybe = function(tokens) {
   if (!window.location.hash.includes('override')) return tokens;

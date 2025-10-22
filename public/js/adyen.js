@@ -4,44 +4,37 @@
 // Uses payment configuration/responses from the API helpers exposed on window.
 window.renderAdyenDropIn = async function(resultDiv) {
   // Fetch client-side configuration and any payment methods payload from server
-  const clientConfig = await window.getPaymentConfiguration();
-  const paymentMethodsPayload = await window.getPaymentResponse();
+  const clientConfig = await window.getPaymentConfiguration(); // call to getPaymentClientConfig
+  const paymentMethodsPayload = await window.getPaymentResponse(); // call to /order with get [ Payments::payment_id::payment_method_gateway_configuration ]
 
   // Create a container for the Adyen Drop-in
-  const dropinContainer = document.createElement('div');
-  dropinContainer.id = 'adyen-dropin-container';
-  dropinContainer.className = 'adyen-dropin';
-  resultDiv.appendChild(dropinContainer);
+    const dropinContainer = document.createElement('div');
+    dropinContainer.id = 'adyen-dropin-container';
+    dropinContainer.className = 'adyen-dropin';
+    resultDiv.appendChild(dropinContainer);
 
   try {
     // Determine which payment methods to pass to the Adyen SDK
     let methodsResponse;
     if (paymentMethodsPayload && paymentMethodsPayload.success && paymentMethodsPayload.paymentMethodsResponse) {
-      console.log('Using real payment methods from AudienceView:', paymentMethodsPayload.paymentMethodsResponse);
       methodsResponse = paymentMethodsPayload.paymentMethodsResponse;
     } else {
-      console.warn('No payment response available, using fallback payment methods');
-      methodsResponse = {
-        paymentMethods: [
-          { name: 'Credit Card', type: 'scheme' },
-          { name: 'PayPal', type: 'paypal' }
-        ]
-      };
+      throw new Error('Invalid or missing payment methods response from server');
     }
 
     // Build Adyen configuration object
     const adyenConfiguration = {
-      environment: clientConfig.environment,
-      clientKey: clientConfig.clientKey,
-      countryCode: clientConfig.countryCode,
-      paymentMethodsResponse: methodsResponse,
+      environment: clientConfig.environment, // test or live. Can be retrieved from the getPaymentClientConfig call under the name adyen_env
+      clientKey: clientConfig.clientKey, // public client key from getPaymentClientConfig, under the name adyen_client_key
+      countryCode: clientConfig.countryCode, // can be retrieved from customer's billing address if needed
+      paymentMethodsResponse: methodsResponse, // the paymentmethod_gateway_configuration field
       amount: {
         // Adyen expects amount in minor units (cents)
         value: Math.round(parseFloat(window.orderTotal || '0') * 100),
         currency: clientConfig.currency
       },
-      onSubmit: (state, dropin) => { window.handleAdyenSubmit(state, dropin); },
-      onAdditionalDetails: (state, dropin) => { window.handleAdyenSubmit(state, dropin);},
+      onSubmit: (state, dropin) => { window.handleAdyenSubmit(state, dropin); }, // should set the external_payment_data field
+      onAdditionalDetails: (state, dropin) => { window.handleAdyenSubmit(state, dropin);}, // should set the external_payment_data field, for Native 3DS2 flows
       onError: (err, dropin) => { console.error('Adyen Drop-in error:', err); alert('Payment error: ' + err.message); },
       onLoad: (state, dropin) => { console.log('Adyen Drop-in loaded'); }
     };
@@ -71,6 +64,12 @@ window.renderAdyenDropIn = async function(resultDiv) {
   }
 };
 
+
+/*
+  * Handle URL parameters returned from Adyen 3DS authentication redirect.
+      When the redirect is back from the challenge page, Adyen appends query parameters to the URL.
+      This function encodes those parameters (as UPS expects them to be) and sends them to the server
+*/
 async function handleUrlParameters(paymentID) {
   // Get query string (after '?')
   const query = window.location.search.substring(1);
@@ -118,7 +117,12 @@ async function handleUrlParameters(paymentID) {
 /**
  * Encode a query string (either with or without a leading '?') into the
  * UPS-style PaRes information string. Example input: "PaRes=<value>&MD=<v>"
- * Returns a length-prefixed string for each key and value: kkkkkeyvvvvalue
+ * @param {string} query - The query string to encode
+ * @returns {string} The encoded PaRes information string
+ * 
+ * An example encoding for "PaRes=abc&MD=123" would be:
+ * 00005PaRes00003abc00002MD00003123
+ * So, is 5 characters for key length, then key, then 5 characters for value length, then value, etc.
  */
 function encodePaResponseInformation(query) {
   if (!query) return "";

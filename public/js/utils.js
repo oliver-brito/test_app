@@ -49,7 +49,6 @@ function renderFoldableJSON(obj, parent) {
 if (detailsBtn) {
     detailsBtn.onclick = async function() {
     try {
-        console.log('Fetching details...');
         const r = await fetch('/details');
         const data = await r.json();
         detailsContent.innerHTML = '';

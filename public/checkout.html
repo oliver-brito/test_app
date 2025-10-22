@@ -67,6 +67,13 @@
   <script>
     (async function() {
       try {
+        /*
+          When we load the page, we can be in two situations:
+          1. Normal checkout flow: user just landed on checkout.html to start payment
+          2. 3DS flow returning from issuer: user is returning from the bank's authentication page with URL parameters
+             that we need to handle to complete the payment.
+          In case 2, we need to handle the URL parameters first before proceeding with the checkout orchestration.
+        */
         var localStoragePaymentID = localStorage.getItem('paymentID');
         var result = handleUrlParameters(localStoragePaymentID);
         // handleUrlParameters may return a promise or a sync value
