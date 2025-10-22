@@ -876,3 +876,56 @@ router.post("/getPaymentMethodType", async (req, res) => {
 });
 
 export default router;
+
+// Template handler for 3DS flow. Currently a no-op placeholder; extend as needed.
+async function handleThreeDS(req, res, { paymentID, transactionData } = {}) {
+  // Example template: call AudienceView to fetch pa_request_information for this payment and log it
+  if (isDebugMode()) console.log('handleThreeDS invoked for paymentID:', paymentID);
+
+  try {
+    const url = new URL(ORDER_PATH, API_BASE).toString();
+    const payload = {
+      get: [ `Payments::${paymentID}::pa_request_information` ],
+      objectName: 'myOrder'
+    };
+
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...authHeaders(),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const text = await r.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = text; }
+
+    // Extract pa_request_information object (standard/input/display)
+    const paObj = data?.data?.[`Payments::${paymentID}::pa_request_information`];
+    let paJsonStr = paObj?.standard || paObj?.input || paObj?.display || null;
+    let paInfo = null;
+    if (paJsonStr) {
+      try {
+        paInfo = JSON.parse(paJsonStr);
+      } catch (e) {
+        // if it's a stringified JSON inside quotes, try a second parse
+        try { paInfo = JSON.parse(JSON.parse(paJsonStr)); } catch { paInfo = paJsonStr; }
+      }
+    }
+    // Return standardized 3DS required response including parsed redirect info
+    return res.status(402).json({
+      success: false,
+      error: '3ds required',
+      code: 4294,
+      paymentID,
+      paRequestInfo: paInfo,
+      rawResponse: data
+    });
+  } catch (err) {
+    if (isDebugMode()) console.log('Error in handleThreeDS:', err?.message || err);
+    return res.status(500).json({ success: false, error: 'handleThreeDS error', details: String(err?.message || err) });
+  }
+}
