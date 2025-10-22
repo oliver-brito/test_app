@@ -6,16 +6,13 @@ import https from "https";
 import path from "path";
 import { fileURLToPath } from "url";
 import { authHeaders } from "./utils/authHeaders.js";
-import { parseSetCookieHeader, mergeCookiePairs, filterCookieHeader } from "./utils/cookieUtils.js";
-import { getSession, getCookies, setSession, setCookies, clearSession } from "./utils/sessionStore.js";
-import { CURRENT_SESSION, CURRENT_COOKIES } from "./utils/sessionStore.js";
-
 
 import loginRouter from "./routes/login.js";
 import eventsRouter from "./routes/events.js";
 import detailsRouter from "./routes/details.js";
 import paymentsRouter from "./routes/payments.js";
 import seatsRouter from "./routes/seats.js";
+import threeDSRouter from "./routes/3ds.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -85,6 +82,7 @@ app.use("/", eventsRouter);
 app.use("/", detailsRouter);
 app.use("/", paymentsRouter);
 app.use("/", seatsRouter);
+app.use("/", threeDSRouter);
 
 // Generic proxy that auto-injects Session + Cookie
 app.post("/proxy", async (req, res) => {
