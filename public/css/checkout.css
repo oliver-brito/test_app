@@ -1,0 +1,55 @@
+/* Styles extracted from checkout.html */
+body { font-family: system-ui, sans-serif; background: #fafafa; margin: 0; padding: 0; }
+.container { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 32px; }
+h1 { font-size: 2rem; margin-bottom: 24px; }
+.summary { margin-bottom: 24px; }
+.label { font-weight: 600; }
+.value { margin-left: 8px; }
+.success { color: #16a34a; font-weight: 600; }
+.error { color: #b91c1c; font-weight: 600; }
+.back { display: inline-block; margin-top: 24px; color: #2563eb; text-decoration: none; }
+
+form label { 
+  display: block; 
+  font-weight: 600; 
+  margin-top: 16px; 
+  margin-bottom: 6px;
+  color: #374151;
+  font-size: 14px;
+}
+
+.hosted-field { 
+  border: 1px solid #d1d5db; 
+  border-radius: 6px; 
+  padding: 12px; 
+  background: #fff;
+  min-height: 20px;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease-in-out;
+}
+
+.hosted-field:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.btn { 
+  background: #3b82f6; 
+  color: white; 
+  border: none; 
+  padding: 12px 24px; 
+  border-radius: 6px; 
+  cursor: pointer; 
+  font-weight: 600;
+  font-size: 16px;
+  margin-top: 24px;
+  width: 100%;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.btn:hover { background: #2563eb; }
+.btn:disabled { background: #9ca3af; cursor: not-allowed; }
+
+.adyen-dropin { margin-top: 24px; max-width: 100%; }
+.adyen-dropin .adyen-checkout__payment-method { margin-bottom: 16px; }
