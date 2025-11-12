@@ -12,6 +12,7 @@ import loginRouter from "./routes/login.js";
 import eventsRouter from "./routes/events.js";
 import detailsRouter from "./routes/details.js";
 import paymentsRouter from "./routes/payments.js";
+import adyenRouter from "./routes/adyen.js"; 
 import seatsRouter from "./routes/seats.js";
 import threeDSRouter from "./routes/3ds.js";
 
@@ -77,7 +78,8 @@ if (!UPCOMING_PATH) {
 app.use("/", loginRouter);
 app.use("/", eventsRouter);
 app.use("/", detailsRouter);
-app.use("/", paymentsRouter);
+app.use("/", paymentsRouter); // generic payment/order lifecycle routes
+app.use("/", adyenRouter);    // Adyen-specific payment integration routes
 app.use("/", seatsRouter);
 app.use("/", threeDSRouter);
 
