@@ -128,21 +128,20 @@ app.post("/proxy", async (req, res) => {
 // --- HTTP + HTTPS ---
 const httpPort  = process.env.PORT || 3000;
 const httpsPort = process.env.HTTPS_PORT || 3443;
-const httpsKey  = process.env.HTTPS_KEY;
-const httpsCert = process.env.HTTPS_CERT;
+// Derive cert paths relative to project root (no env variables needed)
+const certKeyPath  = path.resolve(__dirname, "../certs/localhost-key.pem");
+const certCertPath = path.resolve(__dirname, "../certs/localhost-cert.pem");
 
-if (httpsKey && httpsCert && fs.existsSync(httpsKey) && fs.existsSync(httpsCert)) {
-  // Start HTTPS only
+if (fs.existsSync(certKeyPath) && fs.existsSync(certCertPath)) {
   const credentials = {
-    key:  fs.readFileSync(httpsKey),
-    cert: fs.readFileSync(httpsCert),
+    key:  fs.readFileSync(certKeyPath),
+    cert: fs.readFileSync(certCertPath),
   };
   https.createServer(credentials, app).listen(httpsPort, () => {
-    console.log(`HTTPS listening at https://localhost:${httpsPort}`);
+    console.log(`HTTPS listening at https://localhost:${httpsPort} (certs auto-detected)`);
   });
 } else {
-  // Start HTTP only
   app.listen(httpPort, () => {
-    console.log(`HTTP listening at http://localhost:${httpPort}`);
+    console.log(`HTTP listening at http://localhost:${httpPort} (no certs detected)`);
   });
 }
