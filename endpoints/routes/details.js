@@ -8,13 +8,15 @@ import { CURRENT_SESSION } from "../utils/sessionStore.js";
 import { getCookies, setCookies } from "../utils/sessionStore.js";
 import { authHeaders } from "../utils/authHeaders.js";
 import { parseSetCookieHeader, mergeCookiePairs } from "../utils/cookieUtils.js";
+import { ENDPOINTS } from "../../public/endpoints.js";
 
 // Setup environment variables
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
-const { API_BASE, ORDER_PATH } = process.env;
+const { API_BASE } = process.env;
+const { ORDER: ORDER_PATH } = ENDPOINTS;
 
 const router = express.Router();
 

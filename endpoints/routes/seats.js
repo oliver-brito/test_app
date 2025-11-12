@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { authHeaders } from "../utils/authHeaders.js";
 import { CURRENT_SESSION } from "../utils/sessionStore.js";
 import { isDebugMode } from "../utils/debug.js";
+import { ENDPOINTS } from "../../public/endpoints.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,10 +17,8 @@ dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 const router = express.Router();
 
 // --- Environment variables from .env
-const {
-  API_BASE,
-  ORDER_PATH
-} = process.env;
+const { API_BASE } = process.env;
+const { ORDER: ORDER_PATH } = ENDPOINTS;
 
 // POST /removeSeat -> Remove an admission by ID using manageAdmissions
 router.post('/removeSeat', express.json(), async (req, res) => {

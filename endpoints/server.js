@@ -6,6 +6,7 @@ import https from "https";
 import path from "path";
 import { fileURLToPath } from "url";
 import { authHeaders } from "./utils/authHeaders.js";
+import { ENDPOINTS } from "../public/endpoints.js"; // Non-sensitive static paths
 
 import loginRouter from "./routes/login.js";
 import eventsRouter from "./routes/events.js";
@@ -55,25 +56,21 @@ app.use((req, res, next) => {
 
 
 // --- Environment variables from .env
+const { API_BASE, UNL_USER, UNL_PASSWORD } = process.env;
+// Map endpoint constants from public config for server-side convenience
 const {
-  API_BASE,
-  AUTH_PATH,
-  UNL_USER,
-  UNL_PASSWORD,
-  UPCOMING_PATH,
-  MAP_PATH,
-  PERFORMANCE_PATH,
-  ORDER_PATH
-} = process.env;
+  AUTH: AUTH_PATH,
+  UPCOMING: UPCOMING_PATH,
+} = ENDPOINTS;
 
 // --- Basic environment validation
 if (!API_BASE || !AUTH_PATH || !UNL_USER || !UNL_PASSWORD) {
-  console.error("Missing API_BASE, AUTH_PATH, UNL_USER, or UNL_PASSWORD in .env");
+  console.error("Missing API_BASE, AUTH_PATH, UNL_USER, or UNL_PASSWORD in environment (.env)");
   process.exit(1);
 }
 
 if (!UPCOMING_PATH) {
-  console.warn("UPCOMING_PATH not set in .env (needed for /events/upcoming)");
+  console.warn("UPCOMING_PATH not defined in endpoints.js (needed for /events/upcoming)");
 }
 
 // Mount routes — keeps endpoint as /login

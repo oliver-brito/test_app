@@ -8,6 +8,7 @@ import { parseSetCookieHeader, mergeCookiePairs } from "../utils/cookieUtils.js"
 import { getCookies, setCookies } from "../utils/sessionStore.js";
 import { CURRENT_SESSION } from "../utils/sessionStore.js";
 import { isDebugMode } from "../utils/debug.js";
+import { ENDPOINTS } from "../../public/endpoints.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,10 +19,8 @@ dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 const router = express.Router();
 
 // --- Environment variables from .env
-const {
-  API_BASE,
-  ORDER_PATH
-} = process.env;
+const { API_BASE } = process.env;
+const { ORDER: ORDER_PATH, PAYMENT_METHOD: PAYMENTMETHOD_PATH } = ENDPOINTS;
 
 // POST /transaction -> Process payment transaction via AudienceView API
 router.post("/transaction", express.json(), async (req, res) => {
@@ -354,7 +353,7 @@ async function handlePaymentConfig(req, res) {
       });
     }
 
-    const paymentMethodUrl = new URL('/app/WebAPI/v2/paymentMethod', API_BASE).toString();
+  const paymentMethodUrl = new URL(PAYMENTMETHOD_PATH, API_BASE).toString();
     const payload = {
       actions: [
         {

@@ -8,13 +8,20 @@ import { filterCookieHeader, parseSetCookieHeader, mergeCookiePairs } from "../u
 import { getCookies, setCookies } from "../utils/sessionStore.js";
 import { authHeaders } from "../utils/authHeaders.js";
 import { isDebugMode } from "../utils/debug.js";
+import { ENDPOINTS } from "../../public/endpoints.js";
 
 // Setup environment variables
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
-const { API_BASE, UPCOMING_PATH, ORDER_PATH, PERFORMANCE_PATH, MAP_PATH } = process.env;
+const { API_BASE } = process.env;
+const {
+  UPCOMING: UPCOMING_PATH,
+  ORDER: ORDER_PATH,
+  PERFORMANCE: PERFORMANCE_PATH,
+  MAP: MAP_PATH
+} = ENDPOINTS;
 
 const router = express.Router();
 
@@ -27,11 +34,11 @@ router.get("/events/upcoming", async (_req, res) => {
     if (!CURRENT_SESSION) {
       return res.status(401).json({ error: "Not authenticated" });
     }
-    if (!process.env.UPCOMING_PATH){
+    if (!UPCOMING_PATH){
       return res.status(500).json({ error: "UPCOMING_PATH not configured" });
     }
 
-    const url = new URL(process.env.UPCOMING_PATH, process.env.API_BASE).toString();
+    const url = new URL(UPCOMING_PATH, API_BASE).toString();
     const movePage = parseInt(_req.query.movePage);
     const method = movePage == 1 ? "nextPage" : movePage == -1 ? "prevPage" : "search";
     const payload = {
