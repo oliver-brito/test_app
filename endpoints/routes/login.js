@@ -1,9 +1,9 @@
-// endpoints/routes/login.js
+// endpoints/routes/login.js (refactored to use common helpers)
 import express from "express";
 import { setSession } from "../utils/sessionStore.js";
-import { filterCookieHeader } from "../utils/cookieUtils.js";
-import { isDebugMode } from "../utils/debug.js";
+import { printDebugMessage } from "../utils/debug.js";
 import { ENDPOINTS } from "../../public/endpoints.js";
+import { sendCall, handleSetCookies } from "../utils/common.js"; // note: no validateCall (pre-auth)
 
 const router = express.Router();
 
@@ -13,40 +13,22 @@ const router = express.Router();
  */
 router.post("/login", async (_req, res) => {
   try {
-    if (isDebugMode()) console.log("Starting /login route");
-    
-  const url = new URL(ENDPOINTS.AUTH, process.env.API_BASE).toString();
-    const body = { userid: process.env.UNL_USER, password: process.env.UNL_PASSWORD };
-    const r = await fetch(url, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(body),
-    });
-
-    const raw = await r.text();
-    let data;
-    try { data = JSON.parse(raw); } 
-    catch { data = raw; }
-
-    if (!r.ok || !data?.session) {
-      if (isDebugMode()) console.log("Login authentication failed:", r.status);
-      return res.status(r.status || 500).json({ error: "Auth failed", details: data });
+    printDebugMessage("Starting /login route");
+    const payload = { userid: process.env.UNL_USER, password: process.env.UNL_PASSWORD };
+    const response = await sendCall(ENDPOINTS.AUTH, payload);
+    await handleSetCookies(response); // merges any set-cookie (session)
+    const raw = await response.text();
+    let data; try { data = JSON.parse(raw); } catch { data = raw; }
+    if (!response.ok || !data?.session) {
+      printDebugMessage(`Login authentication failed: ${response.status}`);
+      return res.status(response.status || 500).json({ error: "Auth failed", details: data });
     }
-
-    const session = data.session;
-    const setCookie = r.headers.get("set-cookie");
-    const cookies = setCookie ? filterCookieHeader(setCookie) : `session=${session}`;
-
-    // Save globally
-    setSession(session, cookies);
-
-    if (isDebugMode()) console.log("Login successful");
+    // Persist session + current cookies (handleSetCookies already merged them into store)
+    setSession(data.session);
+    printDebugMessage("Login successful");
     res.json({ session: data.session, version: data.version });
   } catch (err) {
-    if (isDebugMode()) console.log("Error in /login:", err.message);
+    printDebugMessage(`Error in /login: ${err.message}`);
     res.status(500).json({ error: String(err?.message || err) });
   }
 });
