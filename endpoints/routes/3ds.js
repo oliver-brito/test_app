@@ -3,12 +3,10 @@ import express from "express";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import { authHeaders } from "../utils/authHeaders.js";
-import { parseSetCookieHeader, mergeCookiePairs } from "../utils/cookieUtils.js";
-import { getCookies, setCookies } from "../utils/sessionStore.js";
-import { CURRENT_SESSION } from "../utils/sessionStore.js";
-import { isDebugMode } from "../utils/debug.js";
-import { ENDPOINTS } from "../../public/endpoints.js";
+import { CURRENT_SESSION } from "../utils/sessionStore.js"; // current session reference
+import { ENDPOINTS } from "../../public/endpoints.js"; // public endpoints constants
+import { validateCall, sendCall, handleSetCookies } from "../utils/common.js"; // shared validation & fetch & cookie wrapper
+import { insertOrder, redirectToViewOrder } from "./common.js"; // order helpers
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,159 +22,71 @@ const { ORDER: ORDER_PATH } = ENDPOINTS;
 
 router.post("/processThreeDSResponse", async (req, res) => {
     try {
-        if (isDebugMode()) console.log("Starting /processThreeDSResponse route");
+        var expectedParams = ["paymentId", "pa_response_information", "pa_response_URL"];
+        var expectedPaths = ["ORDER_PATH"];
+        validateCall(req, expectedParams, expectedPaths, "processThreeDSResponse");
         if (!CURRENT_SESSION) {
             return res.status(401).json({ error: "Not authenticated" });
         }
-        const {
-            PaRes,
-            pa_response_information,
-            pa_response_URL,
-            pa_response_url,
-            pa_response_url: pa_response_url_dup,
-        } = req.body || {};
 
-        const paResponse = PaRes || pa_response_information || "";
-        const paResponseURL = pa_response_URL || pa_response_url || pa_response_url_dup || "";
-        console.log("All received 3DS data:", { PaRes, pa_response_information, pa_response_URL, pa_response_url });
-        if (!paResponseURL) {
-            return res.status(400).json({ error: 'Missing pa_response_URL in request body' });
-        }
-        if (!paResponse) {
-            return res.status(400).json({ error: 'Missing PARes / pa_response_information in request body' });
-        }
-        const paymentId = req.body.paymentId || req.body.payment_id;
-        if (!paymentId) {
-            return res.status(400).json({ error: 'Missing paymentId in request body' });
-        }
-
+        const { paymentId, pa_response_information, pa_response_URL } = req.body || {};
         const paymentsKeyBase = `Payments::${paymentId}`;
 
+        /**
+         * Payload to submit 3DS response information. 
+         * - pa_response_information: The PARes value returned from the 3DS authentication, encoded.
+         * - pa_response_URL: The URL to redirect the user after 3DS authentication.
+         */
         const outboundBody = {
             set: {
-                [`${paymentsKeyBase}::pa_response_information`]: paResponse,
-                [`${paymentsKeyBase}::pa_response_URL`]: paResponseURL
+                [`${paymentsKeyBase}::pa_response_information`]: pa_response_information,
+                [`${paymentsKeyBase}::pa_response_URL`]: pa_response_URL
             },
             objectName: "myOrder",
             get: ["Payments"]
         };
 
-        // Send request to external Order API (use same fetch pattern as routes/payments.js)
-        const url = `${API_BASE || ''}${ORDER_PATH || '/app/WebAPI/v2/order'}`;
-        const headers = {
-            ...authHeaders(),
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        };
-
-        if (isDebugMode()) console.log('Forwarding 3DS to:', url, 'payload:', JSON.stringify(outboundBody));
-
-        const resp = await fetch(url, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(outboundBody),
-            redirect: 'manual'
-        });
-
+        /**
+         * Submit the 3DS response information to the ORDER endpoint.
+         * This will set the fields and return the updated Payments object.
+         */
+        let resp = await sendCall(ORDER_PATH, outboundBody, true);
         const respText = await resp.text();
         let respJson = null;
-        try { respJson = JSON.parse(respText); } catch (e) { /* ignore, return text below */ }
+        try { respJson = JSON.parse(respText); } catch (e) { /* ignore parse error */ }
+        await handleSetCookies(resp);
+        if (!resp.ok) return res.status(resp.status).json({ status: resp.status, body: respJson || respText });
 
-        // Handle Set-Cookie merging
-        const setCookie = resp.headers.get('set-cookie') || resp.headers.get('Set-Cookie');
-        if (setCookie) {
-            const newPairs = parseSetCookieHeader(setCookie);
-            const merged = mergeCookiePairs(getCookies(), newPairs);
-            setCookies(merged);
-            // try to extract session cookie and update CURRENT_SESSION via setSession if present
-            const sessionPair = newPairs.find(p => /^session=/i.test(p));
-            if (sessionPair) {
-                const sessionVal = sessionPair.split('=')[1];
-                // update both session and cookies
-                // reuse setSession import if available, else setCookies already updated
-                if (typeof setCookies === 'function') {
-                    // attempt to update using sessionStore.setSession if exported
-                    try {
-                        const { setSession } = await import('../utils/sessionStore.js');
-                        setSession(sessionVal, merged);
-                    } catch (e) {
-                        // fallback: setCookies already done
-                    }
-                }
-        }
-        }
-
-        if (!resp.ok) {
-            return res.status(resp.status).json({ status: resp.status, body: respJson || respText });
-        }
-
-        // If initial update succeeded, perform the follow-up actions POST (insert notification correspondence)
-        const actionsBody = {
-            actions: [
-                {
-                    method: "insert",
-                    params: { notification: "correspondence" },
-                    acceptWarnings: [5008, 4224, 5388]
-                }
-            ],
-            objectName: "myOrder"
-        };
-
-        if (isDebugMode()) console.log('Calling follow-up actions on order API:', url, JSON.stringify(actionsBody));
-
-        const actionsResp = await fetch(url, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(actionsBody),
-            redirect: 'manual'
-        });
-
+        /**
+         * Finalize the order by calling insertOrder to complete the payment process.
+         * This will insert the order and use the information in pa_response_information
+         * to process the payment.
+         */
+        var actionsResp = await insertOrder();
         const actionsText = await actionsResp.text();
         let actionsJson = null;
         try { actionsJson = JSON.parse(actionsText); } catch (e) { /* ignore */ }
+        await handleSetCookies(actionsResp);
+        if (!actionsResp.ok) return res.status(actionsResp.status).json({ status: actionsResp.status, body: actionsJson || actionsText });
 
-        // Merge any Set-Cookie from actions response
-        const setCookie2 = actionsResp.headers.get('set-cookie') || actionsResp.headers.get('Set-Cookie');
-        if (setCookie2) {
-            const newPairs2 = parseSetCookieHeader(setCookie2);
-            const merged2 = mergeCookiePairs(getCookies(), newPairs2);
-            setCookies(merged2);
-            try {
-                const { setSession } = await import('../utils/sessionStore.js');
-                const sessionPair2 = newPairs2.find(p => /^session=/i.test(p));
-                if (sessionPair2) setSession(sessionPair2.split('=')[1], merged2);
-            } catch (e) { /* ignore */ }
-        }
-
-        if (!actionsResp.ok) {
-            return res.status(actionsResp.status).json({ status: actionsResp.status, body: actionsJson || actionsText });
-        }
-
-        // Build a redirect-style success response similar to /transaction
-        // Try to extract an order number from the actionsResult or updateResult
+        /** We have successfully processed 3DS and finalized the order 
+         * The following extracts order details for redirection. This is not part of the API response,
+         * is just a visual indicator in the test app to show order completion.
+        */
         const orderNumber = (actionsJson?.data?.["Order::order_number"]?.standard) || (respJson?.data?.["Order::order_number"]?.standard) || null;
-
         const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-
-        if (isDebugMode()) console.log('3DS processing completed, returning redirect payload');
-
-        return res.json({
-            success: true,
-            redirectUrl: `/viewOrder.html?orderId=${orderNumber || transactionId}&transactionId=${transactionId}`,
-            transactionDetails: {
-                success: true,
-                transactionId,
-                orderId: orderNumber || transactionId,
-                timestamp: new Date().toISOString(),
-                paymentMethod: "3DS",
-                status: "completed",
-                updateResult: respJson || respText,
-                actionsResult: actionsJson || actionsText
-            }
-        });
+        const redirectUrl = `/viewOrder.html?orderId=${orderNumber || transactionId}&transactionId=${transactionId}`;
+        var orderDetails = {
+            orderNumber,
+            transactionId,
+            redirectUrl,
+            actionsJson: actionsJson,
+            respJson: respJson,
+            paymentMethod: "3DS Payment"
+        };
+        return redirectToViewOrder(orderDetails, res);
     }
     catch (err) {
-        if (isDebugMode()) console.log("Error in /processThreeDSResponse:", err.message);
         res.status(500).json({ error: String(err?.message || err) });
     }
 });
