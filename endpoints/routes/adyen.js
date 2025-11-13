@@ -2,7 +2,8 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { validateCall, sendCall, handleSetCookies } from "../utils/common.js";
+import { validateCall, sendCall, handleSetCookies, is3dsRequired } from "../utils/common.js";
+import { handleThreeDS, insertOrder, redirectToViewOrder } from "./common.js";
 
 const router = express.Router();
 const { ORDER: ORDER_PATH, PAYMENT_METHOD: PAYMENTMETHOD_PATH } = ENDPOINTS;
@@ -128,12 +129,11 @@ router.post("/processAdyenPayment", async (req, res) => {
       printDebugMessage("Adyen payment data verification failed");
       return res.json({ success: false, paymentID, externalDataSet: false, expectedData: externalData, actualData: externalPaymentDataSet, payments, message: "Adyen payment data verification failed", rawResponse: dataSet });
     }
-    const txPayload = { actions: [{ method: "insert", params: { notification: "correspondence" }, acceptWarnings: [5008, 4224, 5388] }], get: ["Order::order_number", "Payments"], objectName: "myOrder" };
-    const txResp = await sendCall(ORDER_PATH, txPayload);
+    // Use shared helper to perform insert (transaction completion)
+    const txResp = await insertOrder();
     await handleSetCookies(txResp);
     const rawTx = await txResp.text();
     let txData; try { txData = JSON.parse(rawTx); } catch { return res.status(500).json({ success: false, error: "Invalid response from transaction completion", details: rawTx, externalDataSet: true, paymentID }); }
-    const is3dsRequired = (d) => { try { return JSON.stringify(d || '').includes('4294'); } catch { return false; } };
     if (!txResp.ok) {
       if (is3dsRequired(txData)) {
         printDebugMessage('Transaction completion indicates 3DS required (4294)');
@@ -145,29 +145,15 @@ router.post("/processAdyenPayment", async (req, res) => {
     const orderNumber = txData?.data?.["Order::order_number"]?.standard;
     const finalPayments = txData?.data?.Payments || {};
     const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-    printDebugMessage("Adyen payment processed successfully");
-    res.json({
-      success: true,
-      paymentID,
-      externalDataSet: true,
-      transactionCompleted: true,
-      orderId: orderNumber,
-      transactionId,
-      redirectUrl: `/viewOrder.html?orderId=${orderNumber || transactionId}&transactionId=${transactionId}`,
-      transactionDetails: {
-        success: true,
+    const orderData = {
+        orderNumber,
         transactionId,
-        orderId: orderNumber || transactionId,
-        timestamp: new Date().toISOString(),
-        paymentMethod: "Adyen",
-        status: "completed",
-        audienceViewResponse: txData
-      },
-      externalDataVerification: { expectedData: externalData, actualData: externalPaymentDataSet },
-      payments: finalPayments,
-      message: "Adyen payment processed and transaction completed successfully",
-      rawTransactionResponse: txData
-    });
+        actionsJson: txData,
+        respJson: txData,
+        paymentMethod: "Adyen"
+    };
+    printDebugMessage("Adyen payment processed and transaction completed successfully");
+    return redirectToViewOrder(orderData, res);
   } catch (err) {
     printDebugMessage(`Error in /processAdyenPayment: ${err.message}`);
     res.status(500).json({ error: String(err?.message || err) });
@@ -202,25 +188,3 @@ router.post("/getPaymentMethodType", async (req, res) => {
 });
 
 export default router;
-
-// Internal 3DS handler (still placeholder)
-async function handleThreeDS(req, res, { paymentID } = {}) {
-  printDebugMessage(`handleThreeDS invoked for paymentID: ${paymentID}`);
-  try {
-    const payload = { get: [`Payments::${paymentID}::pa_request_information`], objectName: 'myOrder' };
-    const r = await sendCall(ORDER_PATH, payload);
-    await handleSetCookies(r);
-    const text = await r.text();
-    let data; try { data = JSON.parse(text); } catch { data = text; }
-    const paObj = data?.data?.[`Payments::${paymentID}::pa_request_information`];
-    let paJsonStr = paObj?.standard || paObj?.input || paObj?.display || null;
-    let paInfo = null;
-    if (paJsonStr) {
-      try { paInfo = JSON.parse(paJsonStr); } catch { try { paInfo = JSON.parse(JSON.parse(paJsonStr)); } catch { paInfo = paJsonStr; } }
-    }
-    return res.status(402).json({ success: false, error: '3ds required', code: 4294, paymentID, paRequestInfo: paInfo, rawResponse: data });
-  } catch (err) {
-    printDebugMessage(`Error in handleThreeDS: ${err.message}`);
-    return res.status(500).json({ success: false, error: 'handleThreeDS error', details: String(err?.message || err) });
-  }
-}

@@ -2,25 +2,35 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { validateCall, sendCall, handleSetCookies } from "../utils/common.js";
-import { insertOrder, redirectToViewOrder } from "./common.js";
+import { validateCall, sendCall, handleSetCookies, is3dsRequired } from "../utils/common.js";
+import { insertOrder, redirectToViewOrder, handleThreeDS } from "./common.js";
 
 const router = express.Router();
 const { ORDER: ORDER_PATH } = ENDPOINTS; // Adyen-specific routes moved to adyen.js
 
 // POST /transaction -> Process payment transaction via AudienceView API
 router.post("/transaction", express.json(), async (req, res) => {
+  var response = null;
   try {
-    validateCall(req, [], ["ORDER_PATH"], "transaction");
+    validateCall(req, ["paymentId"], ["ORDER_PATH"], "transaction");
 
-    const { orderData } = req.body || {};
-    const response = await insertOrder();
+    const { paymentId } = req.body || {};
+    response = await insertOrder();
     await handleSetCookies(response);
     
     const raw = await response.text();
     let data; try { data = JSON.parse(raw); } catch { data = raw; }
 
     if (!response.ok) {
+      /** When the error is 4294, that means that the payment requires a 3DS confirmation
+     * to be fully processed.
+     * This is a common requirement for card payments to prevent fraud.
+     * So, when receiving this error, we should handle it accordingly.
+     */
+      if (is3dsRequired(data)) {
+        printDebugMessage("Transaction requires 3DS authentication");
+        return handleThreeDS(req, res, { paymentID: req.body?.paymentId });
+      }
       printDebugMessage(`Transaction failed: ${response.status}`);
       return res.status(response.status).json({ success: false, error: "Transaction failed", details: data });
     }
@@ -28,7 +38,7 @@ router.post("/transaction", express.json(), async (req, res) => {
     const orderNumber = data?.data?.["Order::order_number"]?.standard;
     const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 
-    var orderData = {
+    var viewOrderData = {
       orderNumber,
       transactionId,
       actionsJson: data,
@@ -36,7 +46,7 @@ router.post("/transaction", express.json(), async (req, res) => {
       paymentMethod: "N/A"
     };
     printDebugMessage("Transaction completed successfully");
-    return await redirectToViewOrder(orderData, res);
+    return await redirectToViewOrder(viewOrderData, res);
 
   } catch (err) {
     printDebugMessage(`Error in /transaction: ${err.message}`);

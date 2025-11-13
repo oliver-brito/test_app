@@ -38,14 +38,14 @@ app.use((req, res, next) => {
     "Content-Security-Policy",
     [
       "default-src 'self';",
-      "script-src 'self' 'unsafe-inline' https://*.adyen.com https://*.google.com https://*.apple.com;",
-      "style-src 'self' 'unsafe-inline' https://*.adyen.com https://*.google.com https://*.apple.com;",
-      "img-src 'self' data: https://*.adyen.com https://*.google.com https://*.apple.com;",
-      "font-src 'self' data: https://*.adyen.com https://*.google.com https://*.apple.com;",
-      "connect-src 'self' https://*.adyen.com https://*.google.com https://*.apple.com;",
-      "frame-src 'self' https://*.adyen.com https://*.google.com https://*.apple.com;",
-      "frame-ancestors 'self' https://*.adyen.com https://*.google.com https://*.apple.com;",
-      "child-src 'self' https://*.adyen.com https://*.google.com https://*.apple.com;"
+      "script-src 'self' 'unsafe-inline' https://*.adyen.com https://*.google.com https://*.apple.com https://*.cardinalcommerce.com;",
+      "style-src 'self' 'unsafe-inline' https://*.adyen.com https://*.google.com https://*.apple.com https://*.cardinalcommerce.com;",
+      "img-src 'self' data: https://*.adyen.com https://*.google.com https://*.apple.com https://*.cardinalcommerce.com;",
+      "font-src 'self' data: https://*.adyen.com https://*.google.com https://*.apple.com https://*.cardinalcommerce.com;",
+      "connect-src 'self' https://*.adyen.com https://*.google.com https://*.apple.com https://*.cardinalcommerce.com;",
+      "frame-src 'self' https://*.adyen.com https://*.google.com https://*.apple.com https://*.cardinalcommerce.com;",
+      "frame-ancestors 'self' https://*.adyen.com https://*.google.com https://*.apple.com https://*.cardinalcommerce.com;",
+      "child-src 'self' https://*.adyen.com https://*.google.com https://*.apple.com https://*.cardinalcommerce.com;"
     ].join(" ")
   );
 
@@ -87,7 +87,13 @@ app.use("/", threeDSRouter);
 app.post("/proxy", async (req, res) => {
   try {
     const { method = "GET", path = "/", headers = {}, body } = req.body || {};
-    const url = new URL(path, API_BASE).toString();
+    // Allow absolute external URLs (e.g., CardinalCommerce) or fallback to API_BASE relative paths
+    let url;
+    if (/^https?:\/\//i.test(path)) {
+      url = path;
+    } else {
+      url = new URL(path, API_BASE).toString();
+    }
 
     const sanitized = { ...headers };
     // Browser may not override our auth
