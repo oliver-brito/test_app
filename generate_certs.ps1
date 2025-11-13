@@ -7,15 +7,15 @@ if (-not (Get-Command mkcert -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-# Go to repo root (adjust path as needed)
-Set-Location "C:\Users\Oliver\Documents\testApp\test_app"
+# Go to repo root dynamically (directory containing this script)
+Set-Location $PSScriptRoot
 
 # Create certs directory if it doesn't exist
 New-Item -ItemType Directory -Path ".\certs" -Force | Out-Null
 
 # Generate certs directly into ./certs
-mkcert -key-file ".\certs\localhost-key.pem" `
-       -cert-file ".\certs\localhost-cert.pem" `
-       localhost 127.0.0.1 ::1
+mkcert -key-file "$PSScriptRoot\certs\localhost-key.pem" `
+    -cert-file "$PSScriptRoot\certs\localhost-cert.pem" `
+    localhost 127.0.0.1 ::1
 
 Write-Host "Certificates generated in 'certs' folder"

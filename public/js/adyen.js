@@ -80,12 +80,11 @@ async function handleUrlParameters(paymentID) {
 
   // Include the URL where the PA response was received so the server can
   // validate or log the source if needed.
-  const paResponseUrl = window.location.href || "https://localhost:3443/checkout.html";
+  const paResponseUrl = window.location.href || "https://localhost:3444/checkout.html";
 
   // Build payload including paymentId (if available) and both PaRes/pa_response_information for compatibility
   const payload = {
     paymentId: paymentID ||window.paymentID || window.paymentId || null,
-    PaRes: encoded,
     pa_response_information: encoded,
     pa_response_URL: paResponseUrl
   };

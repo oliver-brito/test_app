@@ -3,6 +3,7 @@ import express from "express";
 import { setSession } from "../utils/sessionStore.js";
 import { filterCookieHeader } from "../utils/cookieUtils.js";
 import { isDebugMode } from "../utils/debug.js";
+import { ENDPOINTS } from "../../public/endpoints.js";
 
 const router = express.Router();
 
@@ -14,7 +15,7 @@ router.post("/login", async (_req, res) => {
   try {
     if (isDebugMode()) console.log("Starting /login route");
     
-    const url = new URL(process.env.AUTH_PATH, process.env.API_BASE).toString();
+  const url = new URL(ENDPOINTS.AUTH, process.env.API_BASE).toString();
     const body = { userid: process.env.UNL_USER, password: process.env.UNL_PASSWORD };
     const r = await fetch(url, {
       method: "POST",

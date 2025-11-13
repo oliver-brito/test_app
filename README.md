@@ -16,15 +16,7 @@ UNL_USER=user
 UNL_PASSWORD=pass
 PORT=3000
 
-AUTH_PATH=/app/WebAPI/v2/session/authenticateUser
-UPCOMING_PATH=/app/WebAPI/v2/content
-MAP_PATH=/app/WebAPI/v2/map
-PERFORMANCE_PATH=/app/WebAPI/v2/performance
-ORDER_PATH=/app/WebAPI/v2/order
-
 HTTPS_PORT=3443
-HTTPS_KEY=./certs/localhost-key.pem
-HTTPS_CERT=./certs/localhost-cert.pem
 ```
 
 And then run

@@ -6,11 +6,13 @@ import https from "https";
 import path from "path";
 import { fileURLToPath } from "url";
 import { authHeaders } from "./utils/authHeaders.js";
+import { ENDPOINTS } from "../public/endpoints.js"; // Non-sensitive static paths
 
 import loginRouter from "./routes/login.js";
 import eventsRouter from "./routes/events.js";
 import detailsRouter from "./routes/details.js";
 import paymentsRouter from "./routes/payments.js";
+import adyenRouter from "./routes/adyen.js"; 
 import seatsRouter from "./routes/seats.js";
 import threeDSRouter from "./routes/3ds.js";
 
@@ -36,14 +38,14 @@ app.use((req, res, next) => {
     "Content-Security-Policy",
     [
       "default-src 'self';",
-      "script-src 'self' 'unsafe-inline' https://*.adyen.com https://*.google.com https://*.apple.com;",
-      "style-src 'self' 'unsafe-inline' https://*.adyen.com https://*.google.com https://*.apple.com;",
-      "img-src 'self' data: https://*.adyen.com https://*.google.com https://*.apple.com;",
-      "font-src 'self' data: https://*.adyen.com https://*.google.com https://*.apple.com;",
-      "connect-src 'self' https://*.adyen.com https://*.google.com https://*.apple.com;",
-      "frame-src 'self' https://*.adyen.com https://*.google.com https://*.apple.com;",
-      "frame-ancestors 'self' https://*.adyen.com https://*.google.com https://*.apple.com;",
-      "child-src 'self' https://*.adyen.com https://*.google.com https://*.apple.com;"
+      "script-src 'self' 'unsafe-inline' https://*.adyen.com https://*.google.com https://*.apple.com https://*.cardinalcommerce.com;",
+      "style-src 'self' 'unsafe-inline' https://*.adyen.com https://*.google.com https://*.apple.com https://*.cardinalcommerce.com;",
+      "img-src 'self' data: https://*.adyen.com https://*.google.com https://*.apple.com https://*.cardinalcommerce.com;",
+      "font-src 'self' data: https://*.adyen.com https://*.google.com https://*.apple.com https://*.cardinalcommerce.com;",
+      "connect-src 'self' https://*.adyen.com https://*.google.com https://*.apple.com https://*.cardinalcommerce.com;",
+      "frame-src 'self' https://*.adyen.com https://*.google.com https://*.apple.com https://*.cardinalcommerce.com;",
+      "frame-ancestors 'self' https://*.adyen.com https://*.google.com https://*.apple.com https://*.cardinalcommerce.com;",
+      "child-src 'self' https://*.adyen.com https://*.google.com https://*.apple.com https://*.cardinalcommerce.com;"
     ].join(" ")
   );
 
@@ -55,32 +57,29 @@ app.use((req, res, next) => {
 
 
 // --- Environment variables from .env
+const { API_BASE, UNL_USER, UNL_PASSWORD } = process.env;
+// Map endpoint constants from public config for server-side convenience
 const {
-  API_BASE,
-  AUTH_PATH,
-  UNL_USER,
-  UNL_PASSWORD,
-  UPCOMING_PATH,
-  MAP_PATH,
-  PERFORMANCE_PATH,
-  ORDER_PATH
-} = process.env;
+  AUTH: AUTH_PATH,
+  UPCOMING: UPCOMING_PATH,
+} = ENDPOINTS;
 
 // --- Basic environment validation
 if (!API_BASE || !AUTH_PATH || !UNL_USER || !UNL_PASSWORD) {
-  console.error("Missing API_BASE, AUTH_PATH, UNL_USER, or UNL_PASSWORD in .env");
+  console.error("Missing API_BASE, AUTH_PATH, UNL_USER, or UNL_PASSWORD in environment (.env)");
   process.exit(1);
 }
 
 if (!UPCOMING_PATH) {
-  console.warn("UPCOMING_PATH not set in .env (needed for /events/upcoming)");
+  console.warn("UPCOMING_PATH not defined in endpoints.js (needed for /events/upcoming)");
 }
 
 // Mount routes — keeps endpoint as /login
 app.use("/", loginRouter);
 app.use("/", eventsRouter);
 app.use("/", detailsRouter);
-app.use("/", paymentsRouter);
+app.use("/", paymentsRouter); // generic payment/order lifecycle routes
+app.use("/", adyenRouter);    // Adyen-specific payment integration routes
 app.use("/", seatsRouter);
 app.use("/", threeDSRouter);
 
@@ -88,7 +87,13 @@ app.use("/", threeDSRouter);
 app.post("/proxy", async (req, res) => {
   try {
     const { method = "GET", path = "/", headers = {}, body } = req.body || {};
-    const url = new URL(path, API_BASE).toString();
+    // Allow absolute external URLs (e.g., CardinalCommerce) or fallback to API_BASE relative paths
+    let url;
+    if (/^https?:\/\//i.test(path)) {
+      url = path;
+    } else {
+      url = new URL(path, API_BASE).toString();
+    }
 
     const sanitized = { ...headers };
     // Browser may not override our auth
@@ -131,21 +136,20 @@ app.post("/proxy", async (req, res) => {
 // --- HTTP + HTTPS ---
 const httpPort  = process.env.PORT || 3000;
 const httpsPort = process.env.HTTPS_PORT || 3443;
-const httpsKey  = process.env.HTTPS_KEY;
-const httpsCert = process.env.HTTPS_CERT;
+// Derive cert paths relative to project root (no env variables needed)
+const certKeyPath  = path.resolve(__dirname, "../certs/localhost-key.pem");
+const certCertPath = path.resolve(__dirname, "../certs/localhost-cert.pem");
 
-if (httpsKey && httpsCert && fs.existsSync(httpsKey) && fs.existsSync(httpsCert)) {
-  // Start HTTPS only
+if (fs.existsSync(certKeyPath) && fs.existsSync(certCertPath)) {
   const credentials = {
-    key:  fs.readFileSync(httpsKey),
-    cert: fs.readFileSync(httpsCert),
+    key:  fs.readFileSync(certKeyPath),
+    cert: fs.readFileSync(certCertPath),
   };
   https.createServer(credentials, app).listen(httpsPort, () => {
-    console.log(`HTTPS listening at https://localhost:${httpsPort}`);
+    console.log(`HTTPS listening at https://localhost:${httpsPort} (certs auto-detected)`);
   });
 } else {
-  // Start HTTP only
   app.listen(httpPort, () => {
-    console.log(`HTTP listening at http://localhost:${httpPort}`);
+    console.log(`HTTP listening at http://localhost:${httpPort} (no certs detected)`);
   });
 }

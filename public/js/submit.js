@@ -70,7 +70,7 @@ function handleSubmit(event) {
     try {
       const payload = {
         paymentData: paymentData,
-        paymentID: pid,
+        paymentId: pid,
         orderData: {
           eventId: localStorage.getItem('eventId'),
           deliveryMethod: localStorage.getItem('deliveryMethod'),
@@ -88,6 +88,65 @@ function handleSubmit(event) {
 
       const result = await response.json();
 
+      // 3DS required: initiate Cardinal Cruise Collect via hidden iframe and form POST
+        if (result.error === "3ds required" && result.paRequestInfo && result.paRequestURL) {
+          console.log("📌 3DS required detected:", result);
+
+          const paRequestURL = result.paRequestURL.standard || result.paRequestURL;
+          const jwt = result.paRequestInfo.body.JWT || result.paRequestInfo.body?.JWT || result.paRequestInfo.body; // fallback if structure differs
+
+          // Early raw listener to observe ALL postMessages (no once:true so we don't miss final message)
+          window.addEventListener('message', async (e) => {
+             // Send a single JSON POST and await the response so we don't duplicate requests
+            var payload = {
+              paymentId: pid,
+              pa_response_information: e.data,
+              pa_response_URL: window.location.href || "https://localhost:3444/checkout.html"
+            };
+            try {
+              const resp = await fetch("/processThreeDSResponse", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+              });
+              let resultText = await resp.text();
+              let result = null;
+              try { result = JSON.parse(resultText); } catch (e) { result = resultText; }
+
+              if (resp.ok && result && result.success && result.redirectUrl) {
+                setTimeout(() => { window.location.href = result.redirectUrl; }, 1500);
+              } else {
+                const errMsg = (result && result.error) ? result.error : (typeof result === 'string' ? result : 'Transaction failed');
+                throw new Error(errMsg);
+              }
+            } catch (e) {
+              console.error("❌ Error sending PaRes (JSON):", e);
+            }
+          });
+
+          // Single hidden iframe (no nested iframe) for Cruise Collect form POST
+          const iframe = document.createElement('iframe');
+          iframe.style.width = '0';
+          iframe.style.height = '0';
+          iframe.style.border = '0';
+          iframe.id = 'cardinal-iframe';
+          iframe.name = 'cardinalFrame';
+          document.body.appendChild(iframe);
+
+          const html = `
+            <html>
+              <body onload="document.forms[0].submit()">
+                <form action="${paRequestURL}" method="POST" target="_self">
+                  <input type="hidden" name="JWT" value="${jwt}" />
+                </form>
+              </body>
+            </html>
+          `;
+
+          iframe.contentDocument.open();
+          iframe.contentDocument.write(html);
+          iframe.contentDocument.close();
+      }
       if (result.success && result.redirectUrl) {
         showSuccess('Payment processed successfully! Redirecting to confirmation...');
         setTimeout(() => { window.location.href = result.redirectUrl; }, 1500);
