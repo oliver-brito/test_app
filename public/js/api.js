@@ -1,23 +1,18 @@
 // API helpers for checkout (exposed on window)
 
 window.fetchCheckoutData = async function({ eventId, deliveryMethod, paymentMethod }) {
-  const r = await fetch('/checkout', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ eventId, deliveryMethod, paymentMethod })
+  // Use the new API wrapper for automatic error modal display
+  return await window.apiCall('/checkout', {
+    body: { eventId, deliveryMethod, paymentMethod }
   });
-  return r.json();
 };
 
 window.determineAdyenFlag = async function(paymentID) {
   if (!paymentID) return false;
   try {
-    const paymentTypeResponse = await fetch('/getPaymentMethodType', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paymentID: paymentID })
+    const paymentTypeData = await window.apiCall('/getPaymentMethodType', {
+      body: { paymentID: paymentID }
     });
-    const paymentTypeData = await paymentTypeResponse.json();
     if (paymentTypeData.success && paymentTypeData.paymentMethodType) {
       const paymentMethodType = paymentTypeData.paymentMethodType;
       const containsAdyen = Object.values(paymentMethodType).some(value => typeof value === 'string' && value.toLowerCase().includes('adyen'));
@@ -37,12 +32,9 @@ window.getPaymentConfiguration = async function() {
   try {
     const paymentMethodId = localStorage.getItem('paymentMethod') || '';
     const eventId = localStorage.getItem('eventId') || '';
-    const response = await fetch('/getPaymentClientConfig', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paymentMethodId: paymentMethodId, eventId: eventId, paymentID: window.paymentID })
+    const serverConfig = await window.apiCall('/getPaymentClientConfig', {
+      body: { paymentMethodId: paymentMethodId, eventId: eventId, paymentID: window.paymentID }
     });
-    const serverConfig = await response.json();
   // Server payment config fetched
     return {
       environment: serverConfig.environment,
@@ -59,12 +51,9 @@ window.getPaymentConfiguration = async function() {
 // call to /order with get [ Payments::payment_id::payment_method_gateway_configuration ]
 window.getPaymentResponse = async function() {
   try {
-    const response = await fetch('/getPaymentResponse', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paymentID: window.paymentID })
+    const paymentResponse = await window.apiCall('/getPaymentResponse', {
+      body: { paymentID: window.paymentID }
     });
-    const paymentResponse = await response.json();
   // Payment response fetched
     return paymentResponse;
   } catch (error) {
@@ -80,12 +69,10 @@ window.getPaymentResponse = async function() {
 window.handleAdyenSubmit = async function(state, dropin) {
   // Adyen Drop-in onSubmit invoked
   try {
-    const response = await fetch('/processAdyenPayment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ externalData: JSON.stringify(state.data), paymentID: window.paymentID })
+    // Use the new API wrapper for automatic error modal display
+    const result = await window.apiCall('/processAdyenPayment', {
+      body: { externalData: JSON.stringify(state.data), paymentID: window.paymentID }
     });
-    const result = await response.json();
   // Payment processing result received
     if (result.success && result.redirectUrl) {
       window.location.href = result.redirectUrl;
@@ -105,6 +92,9 @@ window.handleAdyenSubmit = async function(state, dropin) {
     }
   } catch (error) {
     console.error('Payment submission error:', error);
-    alert('Payment submission failed: ' + error.message);
+    // Error modal already shown by apiCall wrapper if it was an API error
+    if (!error.message.includes('Payment failed')) {
+      alert('Payment submission failed: ' + error.message);
+    }
   }
 };

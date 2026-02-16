@@ -2,18 +2,16 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { validateCall, sendCall, handleSetCookies } from "../utils/common.js";
+import { makeApiCallWithErrorHandling } from "../utils/common.js";
+import { wrapRouteWithValidation } from "../utils/routeWrapper.js";
 
 const { UPCOMING: UPCOMING_PATH, ORDER: ORDER_PATH, PERFORMANCE: PERFORMANCE_PATH, MAP: MAP_PATH } = ENDPOINTS;
 
 const router = express.Router();
 
 // GET /events/upcoming -> Retrieve upcoming events list
-router.get("/events/upcoming", async (req, res) => {
-  try {
-    const expectedPaths = ["UPCOMING_PATH"]; // for visibility/logging only right now
-    validateCall(req, [], expectedPaths, "events/upcoming");
-
+router.get("/events/upcoming", wrapRouteWithValidation(
+  async (req, res) => {
     const movePage = parseInt(req.query.movePage);
     const method = movePage === 1 ? "nextPage" : movePage === -1 ? "prevPage" : "search";
     const payload = {
@@ -33,39 +31,28 @@ router.get("/events/upcoming", async (req, res) => {
       objectName: "mySearchResults"
     };
 
-    const response = await sendCall(UPCOMING_PATH, payload);
-    await handleSetCookies(response);
+    const result = await makeApiCallWithErrorHandling(
+      res, UPCOMING_PATH, payload, "Upcoming failed"
+    );
+    if (!result) return; // Error already handled
 
-    const rawText = await response.text();
-    let data; try { data = JSON.parse(rawText); } catch { data = rawText; }
-
-    if (!response.ok) {
-      printDebugMessage(`Events upcoming fetch failed: ${response.status}`);
-      return res.status(response.status).json({ error: "Upcoming failed", details: data });
-    }
-
-    if (data?.errorCode || /error/i.test(data?.message || "")) {
+    // Check for soft error
+    if (result.data?.errorCode || /error/i.test(result.data?.message || "")) {
       printDebugMessage("Events upcoming soft error");
-      return res.status(400).json({ error: "Upstream error", details: data });
+      return res.status(400).json({ error: "Upstream error", details: result.data });
     }
 
-    const resultsObj = data?.data?.SearchResults || {};
+    const resultsObj = result.data?.data?.SearchResults || {};
     const events = Object.values(resultsObj);
     printDebugMessage("Events upcoming fetched successfully");
-    res.json({ events, rawResponse: data });
-  } catch (err) {
-    printDebugMessage(`Error in /events/upcoming: ${err.message}`);
-    res.status(500).json({ error: String(err?.message || err) });
-  }
-});
+    res.json({ events, rawResponse: result.data });
+  },
+  { params: [], paths: ["UPCOMING_PATH"], name: "events/upcoming" }
+));
 
 // POST /map/availability/:id -> getBestAvailable seats
-router.post("/map/availability/:id", async (req, res) => {
-  try {
-    const expectedPaths = ["ORDER_PATH"];
-    // Expect priceTypeId & numSeats in body
-    validateCall(req, ["priceTypeId", "numSeats"], expectedPaths, "map/availability");
-
+router.post("/map/availability/:id", wrapRouteWithValidation(
+  async (req, res) => {
     const performanceId = req.params.id;
     const { priceTypeId, numSeats } = req.body;
     const payload = {
@@ -84,30 +71,20 @@ router.post("/map/availability/:id", async (req, res) => {
       objectName: "myOrder"
     };
 
-    const response = await sendCall(ORDER_PATH, payload);
-    await handleSetCookies(response);
-    const raw = await response.text();
-    let data; try { data = JSON.parse(raw); } catch { data = raw; }
-
-    if (!response.ok) {
-      printDebugMessage(`Map availability fetch failed: ${response.status}`);
-      return res.status(response.status).json({ error: "getBestAvailable failed", details: data });
-    }
+    const result = await makeApiCallWithErrorHandling(
+      res, ORDER_PATH, payload, "getBestAvailable failed"
+    );
+    if (!result) return; // Error already handled
 
     printDebugMessage("Map availability fetched successfully");
-    res.json(data);
-  } catch (err) {
-    printDebugMessage(`Error in /map/availability: ${err.message}`);
-    res.status(500).json({ error: String(err?.message || err) });
-  }
-});
+    res.json(result.data);
+  },
+  { params: ["priceTypeId", "numSeats"], paths: ["ORDER_PATH"], name: "map/availability" }
+));
 
 // GET /events/:id -> performance.load
-router.get("/events/:id", async (req, res) => {
-  try {
-    const expectedPaths = ["PERFORMANCE_PATH"];
-    validateCall(req, [], expectedPaths, "events/:id");
-
+router.get("/events/:id", wrapRouteWithValidation(
+  async (req, res) => {
     const performanceId = req.params.id;
     const payload = {
       actions: [
@@ -120,36 +97,26 @@ router.get("/events/:id", async (req, res) => {
       objectName: "myPerformance"
     };
 
-    const response = await sendCall(PERFORMANCE_PATH, payload);
-    await handleSetCookies(response);
-    const raw = await response.text();
-    let data; try { data = JSON.parse(raw); } catch { data = raw; }
+    const result = await makeApiCallWithErrorHandling(
+      res, PERFORMANCE_PATH, payload, "performance.load failed"
+    );
+    if (!result) return; // Error already handled
 
-    if (!response.ok) {
-      printDebugMessage(`Performance load failed: ${response.status}`);
-      return res.status(response.status).json({ error: "performance.load failed", details: data });
-    }
-
-    const perf = data?.data?.Performance;
+    const perf = result.data?.data?.Performance;
     if (!perf) {
       printDebugMessage("Performance not found");
-      return res.status(404).json({ error: "Performance not found", details: data });
+      return res.status(404).json({ error: "Performance not found", details: result.data });
     }
 
     printDebugMessage("Performance loaded successfully");
-    res.json({ performance: perf, rawResponse: data });
-  } catch (err) {
-    printDebugMessage(`Error in /events/:id: ${err.message}`);
-    res.status(500).json({ error: String(err?.message || err) });
-  }
-});
+    res.json({ performance: perf, rawResponse: result.data });
+  },
+  { params: [], paths: ["PERFORMANCE_PATH"], name: "events/:id" }
+));
 
 // POST /map/pricing/:id -> map pricing (loadBestAvailable + loadAvailability pricetypes)
-router.post("/map/pricing/:id", async (req, res) => {
-  try {
-    const expectedPaths = ["MAP_PATH"];
-    validateCall(req, [], expectedPaths, "map/pricing");
-
+router.post("/map/pricing/:id", wrapRouteWithValidation(
+  async (req, res) => {
     const performanceId = req.params.id;
     const payload = {
       actions: [
@@ -160,23 +127,16 @@ router.post("/map/pricing/:id", async (req, res) => {
       objectName: "myMap"
     };
 
-    const response = await sendCall(MAP_PATH, payload);
-    await handleSetCookies(response);
-    const raw = await response.text();
-    let data; try { data = JSON.parse(raw); } catch { data = raw; }
+    const result = await makeApiCallWithErrorHandling(
+      res, MAP_PATH, payload, "loadMap(pricing) failed"
+    );
+    if (!result) return; // Error already handled
 
-    if (!response.ok) {
-      printDebugMessage(`Map pricing fetch failed: ${response.status}`);
-      return res.status(response.status).json({ error: "loadMap(pricing) failed", details: data });
-    }
-
-    const pricetypes = data?.data?.pricetypes || {};
+    const pricetypes = result.data?.data?.pricetypes || {};
     printDebugMessage("Map pricing fetched successfully");
-    res.json({ pricetypes, rawResponse: data });
-  } catch (err) {
-    printDebugMessage(`Error in /map/pricing: ${err.message}`);
-    res.status(500).json({ error: String(err?.message || err) });
-  }
-});
+    res.json({ pricetypes, rawResponse: result.data });
+  },
+  { params: [], paths: ["MAP_PATH"], name: "map/pricing" }
+));
 
 export default router;

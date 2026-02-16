@@ -2,17 +2,16 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { validateCall, sendCall, handleSetCookies } from "../utils/common.js";
+import { makeApiCallWithErrorHandling } from "../utils/common.js";
+import { wrapRouteWithValidation } from "../utils/routeWrapper.js";
 
 const router = express.Router();
 const { ORDER: ORDER_PATH } = ENDPOINTS;
 
 // POST /removeSeat -> Remove an admission by ID using manageAdmissions
-router.post('/removeSeat', express.json(), async (req, res) => {
-  try {
-    // admissionId required
-    validateCall(req, ["admissionId"], ["ORDER_PATH"], "removeSeat");
-    const { admissionId } = req.body || {};
+router.post('/removeSeat', express.json(), wrapRouteWithValidation(
+  async (req, res) => {
+    const { admissionId } = req.body;
     const payload = {
       actions: [
         {
@@ -25,20 +24,15 @@ router.post('/removeSeat', express.json(), async (req, res) => {
       objectName: "myOrder"
     };
 
-    const response = await sendCall(ORDER_PATH, payload);
-    await handleSetCookies(response);
-    const raw = await response.text();
-    let data; try { data = JSON.parse(raw); } catch { data = raw; }
-    if (!response.ok) {
-      printDebugMessage(`Seat removal failed: ${response.status}`);
-      return res.status(response.status).json({ error: "Failed to remove admission", details: data });
-    }
+    const result = await makeApiCallWithErrorHandling(
+      res, ORDER_PATH, payload, "Failed to remove admission"
+    );
+    if (!result) return; // Error already handled
+
     printDebugMessage('Seat removal successful');
-    res.json({ success: true, response: data });
-  } catch (err) {
-    printDebugMessage(`Error in /removeSeat: ${err.message}`);
-    res.status(500).json({ error: String(err?.message || err) });
-  }
-});
+    res.json({ success: true, response: result.data });
+  },
+  { params: ["admissionId"], paths: ["ORDER_PATH"], name: "removeSeat" }
+));
 
 export default router;

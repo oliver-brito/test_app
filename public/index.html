@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Upcoming Events</title>
   <script src="helpers.js"></script>
+  <script src="js/errorModal.js"></script>
+  <script src="js/apiWrapper.js"></script>
   <style>
     :root { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
     body { margin: 16px; background: #fafafa; }
@@ -123,7 +125,7 @@
 
         $status.textContent = "Loading events…";
         const events = await Content(movePage);
-
+        console.log(events);
         $list.innerHTML = "";
         if (!events || events.length === 0) {
           $list.insertAdjacentHTML("beforeend", `<li class="muted">No upcoming events.</li>`);

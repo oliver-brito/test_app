@@ -80,13 +80,10 @@ function handleSubmit(event) {
         }
       };
 
-      const response = await fetch('/transaction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+      // Use the new API wrapper for automatic error modal display
+      const result = await window.apiCall('/transaction', {
+        body: payload
       });
-
-      const result = await response.json();
 
       // 3DS required: initiate Cardinal Cruise Collect via hidden iframe and form POST
         if (result.error === "3ds required" && result.paRequestInfo && result.paRequestURL) {
@@ -104,16 +101,12 @@ function handleSubmit(event) {
               pa_response_URL: window.location.href || "https://localhost:3444/checkout.html"
             };
             try {
-              const resp = await fetch("/processThreeDSResponse", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
+              // Use the new API wrapper for automatic error modal display
+              const result = await window.apiCall("/processThreeDSResponse", {
+                body: payload
               });
-              let resultText = await resp.text();
-              let result = null;
-              try { result = JSON.parse(resultText); } catch (e) { result = resultText; }
 
-              if (resp.ok && result && result.success && result.redirectUrl) {
+              if (result && result.success && result.redirectUrl) {
                 setTimeout(() => { window.location.href = result.redirectUrl; }, 1500);
               } else {
                 const errMsg = (result && result.error) ? result.error : (typeof result === 'string' ? result : 'Transaction failed');

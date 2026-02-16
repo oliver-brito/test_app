@@ -1,6 +1,6 @@
 import dotenv from "dotenv"; // Ensure .env variables are loaded even if this file is imported before server bootstrap
 import { CURRENT_SESSION } from "../utils/sessionStore.js";
-import { printDebugMessage } from "../utils/debug.js";
+import { printDebugMessage, logApiCall } from "../utils/debug.js";
 import { authHeaders } from "../utils/authHeaders.js";
 import { parseSetCookieHeader, mergeCookiePairs } from "../utils/cookieUtils.js";
 import { getCookies, setCookies } from "../utils/sessionStore.js";
@@ -66,7 +66,15 @@ export async function sendCall(path, payload, manual=false) {
             "Content-Type": "application/json",
             "Accept": "application/json"
         };
-        
+
+        // Log the request
+        logApiCall(path, {
+            url,
+            method: "POST",
+            headers,
+            body: payload
+        });
+
         const response = await fetch(url, {
             method: "POST",
             headers,
@@ -104,4 +112,108 @@ export function is3dsRequired(data) {
     } catch {
         return false;
     }
+}
+
+/**
+ * Parses response text as JSON, falls back to raw text if parsing fails.
+ * Eliminates the repeated pattern: const raw = await response.text(); let data; try { data = JSON.parse(raw); } catch { data = raw; }
+ * @param {Response} response - Fetch API response object
+ * @returns {Promise<any>} Parsed JSON or raw text
+ */
+export async function parseResponse(response) {
+    const raw = await response.text();
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return raw;
+    }
+}
+
+/**
+ * Complete API call with cookie handling and response parsing.
+ * Combines sendCall + handleSetCookies + parseResponse into a single operation.
+ * @param {string} path - API endpoint path
+ * @param {object} payload - Request payload
+ * @param {boolean} manual - Manual redirect flag (default: false)
+ * @returns {Promise<{response: Response, data: any}>}
+ */
+export async function makeApiCall(path, payload, manual = false) {
+    const response = await sendCall(path, payload, manual);
+    await handleSetCookies(response);
+    const data = await parseResponse(response);
+
+    // Log the response
+    logApiCall(path, { body: payload }, response, data);
+
+    return { response, data };
+}
+
+/**
+ * Standardized error response handler.
+ * Returns structured error with request/response details for frontend debugging modal.
+ * @param {object} res - Express response object
+ * @param {Response} response - Fetch response
+ * @param {any} data - Parsed response data
+ * @param {string} errorMessage - Custom error message
+ * @param {string} endpoint - The endpoint that was called
+ * @param {object} requestPayload - The original request payload
+ * @returns {object} Express JSON response
+ */
+export function handleApiError(res, response, data, errorMessage, endpoint = 'unknown', requestPayload = null) {
+    printDebugMessage(`${errorMessage}: ${response.status}`);
+    return res.status(response.status).json({
+        error: errorMessage,
+        message: errorMessage,
+        status: response.status,
+        endpoint: endpoint,
+        request: requestPayload ? {
+            endpoint: endpoint,
+            payload: requestPayload,
+            timestamp: new Date().toISOString()
+        } : null,
+        response: data,
+        details: data,
+        debugInfo: {
+            timestamp: new Date().toISOString(),
+            statusText: response.statusText || 'Unknown Error'
+        }
+    });
+}
+
+/**
+ * Complete API call with automatic error handling.
+ * Returns null if error occurred (response already sent to client).
+ * Handles 3DS detection if check3ds option is enabled.
+ * @param {object} res - Express response object
+ * @param {string} path - API endpoint path
+ * @param {object} payload - Request payload
+ * @param {string} errorMessage - Error message for failures
+ * @param {object} options - Optional settings
+ * @param {boolean} options.manual - Manual redirect flag
+ * @param {boolean} options.check3ds - Check for 3DS requirement
+ * @returns {Promise<{response: Response, data: any, requires3ds?: boolean} | null>}
+ */
+export async function makeApiCallWithErrorHandling(
+    res,
+    path,
+    payload,
+    errorMessage,
+    options = {}
+) {
+    const { manual = false, check3ds = false } = options;
+
+    const { response, data } = await makeApiCall(path, payload, manual);
+
+    if (!response.ok) {
+        // Check for 3DS requirement if enabled
+        if (check3ds && is3dsRequired(data)) {
+            printDebugMessage("3DS authentication required");
+            return { response, data, requires3ds: true };
+        }
+
+        handleApiError(res, response, data, errorMessage, path, payload);
+        return null;
+    }
+
+    return { response, data };
 }
