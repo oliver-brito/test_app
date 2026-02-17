@@ -2,7 +2,7 @@ import { ENDPOINTS } from '../../public/js/endpoints.js';
 import { sendCall, validateCall, handleSetCookies, makeApiCallWithErrorHandling } from '../utils/common.js';
 import { printDebugMessage } from '../utils/debug.js';
 
-const { ORDER: ORDER_PATH } = ENDPOINTS;
+const { ORDER: ORDER_PATH, USER: USER_PATH } = ENDPOINTS;
 
 export async function insertOrder() {
     validateCall({}, [], [], "insertOrder");
@@ -97,12 +97,23 @@ export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod
   // Collect all backend API calls for frontend logging
   const backendApiCalls = [];
 
+  // Step 0: Get customer number
+  const getSessionCustomerIdResult = await makeApiCallWithErrorHandling(
+    res,
+    USER_PATH,
+    {session: {get: ["customer_id"]}},
+    "Customer not found for user"
+  );
+
+  var customer_id = getSessionCustomerIdResult?.data?.data?.customer_id?.standard;
+
+  if (!getSessionCustomerIdResult) return null;
   // Step 1: Add customer
   const customerResult = await makeApiCallWithErrorHandling(
     res,
     ORDER_PATH,
     {
-      actions: [{ method: "addCustomer", params: { "Customer::customer_number": "1" } }],
+      actions: [{ method: "addCustomer", params: { "Customer::customer_id": customer_id } }],
       get: ["Order::order_number", "Payments"],
       objectName: "myOrder"
     },

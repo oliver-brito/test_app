@@ -9,7 +9,8 @@ export const ENDPOINTS = {
   ORDER: "/app/WebAPI/v2/order",
   CUSTOMER: "/app/WebAPI/v2/customer",
   SESSION: "/app/WebAPI/session",
-  PAYMENT_METHOD: "/app/WebAPI/v2/paymentmethod"
+  PAYMENT_METHOD: "/app/WebAPI/v2/paymentmethod",
+  USER: "/app/WebAPI/v2/user"
 };
 
 // Optional helper for building full URLs server-side
