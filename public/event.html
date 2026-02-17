@@ -6,6 +6,7 @@
   <title>Event Details</title>
   <script src="helpers.js"></script>
   <script src="js/errorModal.js"></script>
+  <script src="js/apiDebugConsole.js"></script>
   <script src="js/apiWrapper.js"></script>
   <style>
     :root { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
@@ -147,18 +148,11 @@
             }
             const admissionId = s.admission_id.standard;
             try {
-              const resp = await fetch('/removeSeat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ admissionId })
+              const result = await window.apiCall('/removeSeat', {
+                body: { admissionId }
               });
-              if (!resp.ok) {
-                const err = await resp.text();
-                alert('Failed to remove seat (id: ' + admissionId + '): ' + err);
-              } else {
-                alert('Seat removal requested (id: ' + admissionId + ').');
-                refreshSeats(); // Refresh seat list from /order
-              }
+              alert('Seat removal requested (id: ' + admissionId + ').');
+              refreshSeats(); // Refresh seat list from /order
             } catch (err) {
               alert('Error removing seat (id: ' + admissionId + '): ' + err.message);
             }
@@ -171,9 +165,7 @@
     // Refresh seats by calling /order and rendering seats with state 24
     async function refreshSeats() {
       try {
-        const r = await fetch('/order');
-        if (!r.ok) throw new Error('Failed to fetch order');
-        const data = await r.json();
+        const data = await window.apiCall('/order', { method: 'GET' });
         // Extract Admissions from order
         const admissions = data?.rawResponse?.data?.Admissions || data?.admissions || {};
         const seatRows = Object.entries(admissions)
@@ -199,9 +191,7 @@
         return;
       }
       try {
-        const r = await fetch(`/events/${encodeURIComponent(eventId)}`);
-        if (!r.ok) throw new Error("Failed to load event");
-        const ev = await r.json();
+        const ev = await window.apiCall(`/events/${encodeURIComponent(eventId)}`, { method: 'GET' });
         renderEvent(ev);
         console.log("Event loaded:", ev);
       } catch (e) {
@@ -214,13 +204,9 @@
       const n = Math.max(1, parseInt($num.value, 10) || 1);
       const priceTypeId = $pricetype.value;
       try {
-        const r = await fetch(`/map/availability/${encodeURIComponent(eventId)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ numSeats: n, priceTypeId })
+        const data = await window.apiCall(`/map/availability/${encodeURIComponent(eventId)}`, {
+          body: { numSeats: n, priceTypeId }
         });
-        if (!r.ok) throw new Error("Failed to load availability");
-        const data = await r.json();
         console.log("Best available loaded:", data);
 
         // Admissions (seats)
@@ -289,13 +275,9 @@
       $pricetype.innerHTML = '';
       if (!eventId) return;
       try {
-        const r = await fetch(`/map/pricing/${encodeURIComponent(eventId)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({})
+        const data = await window.apiCall(`/map/pricing/${encodeURIComponent(eventId)}`, {
+          body: {}
         });
-        if (!r.ok) throw new Error("Failed to load price types");
-        const data = await r.json();
         console.log("Price types loaded:", data);
         const pricetypes = data.pricetypes;
         if (pricetypes && typeof pricetypes === "object") {
