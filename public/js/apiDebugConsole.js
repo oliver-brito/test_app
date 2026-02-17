@@ -333,14 +333,17 @@
   // Render all logs
   function renderLogs() {
     const logsContainer = document.getElementById('console-logs');
-    const emptyState = document.getElementById('empty-state');
+    let emptyState = document.getElementById('empty-state');
 
     if (apiCallLogs.length === 0) {
-      emptyState.style.display = 'flex';
+      // Clear all log entries but keep empty state
+      const logEntries = logsContainer.querySelectorAll('.log-entry');
+      logEntries.forEach(entry => entry.remove());
+      if (emptyState) emptyState.style.display = 'flex';
       return;
     }
 
-    emptyState.style.display = 'none';
+    if (emptyState) emptyState.style.display = 'none';
 
     const logsHTML = apiCallLogs.map((log, index) => {
       const statusColor = log.status >= 200 && log.status < 300 ? '#4ec9b0' :
@@ -419,7 +422,16 @@
       `;
     }).join('');
 
-    logsContainer.innerHTML = logsHTML + '<div id="empty-state" style="display:none; align-items:center; justify-content:center; height:100%; color:#858585; font-size:12px;">No API calls logged yet. Make an API request to see it here.</div>';
+    // Clear only log entries, preserve empty state
+    const logEntries = logsContainer.querySelectorAll('.log-entry');
+    logEntries.forEach(entry => entry.remove());
+
+    // Insert new logs before empty state
+    if (emptyState) {
+      emptyState.insertAdjacentHTML('beforebegin', logsHTML);
+    } else {
+      logsContainer.innerHTML = logsHTML;
+    }
   }
 
   // Update call count
