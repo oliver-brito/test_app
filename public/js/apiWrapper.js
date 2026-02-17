@@ -59,13 +59,22 @@
                             responseData.details === 'Not authenticated' ||
                             responseData.errorCode === '99' ||
                             responseData.errorCode === 99 ||
+                            responseData.message === 'Session Expired' ||
                             (responseData.message && responseData.message.toLowerCase().includes('session expired'))));
 
-      if (isAuthError && showErrorModal) {
-        const currentPath = window.location.pathname + window.location.search;
-        const returnUrl = encodeURIComponent(currentPath);
-        window.location.href = `/login.html?session_expired=true&return_url=${returnUrl}`;
-        return;
+      if (isAuthError) {
+        // Clear session data
+        sessionStorage.removeItem('av_credentials');
+        sessionStorage.removeItem('av_session');
+
+        if (showErrorModal) {
+          const currentPath = window.location.pathname + window.location.search;
+          const returnUrl = encodeURIComponent(currentPath);
+          window.location.href = `/login.html?session_expired=true&return_url=${returnUrl}`;
+        }
+
+        // Throw error to stop further processing
+        throw new Error('Session expired');
       }
 
       // Only show error modal for failed requests

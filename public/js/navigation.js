@@ -25,10 +25,6 @@
               ☰
             </button>
 
-            <ul class="nav-menu" id="nav-menu">
-              <li class="nav-item"><a href="about.html" class="nav-link">About</a></li>
-            </ul>
-
             <div class="nav-filter">
               <select id="object-type-filter" class="nav-filter-select" aria-label="Filter by type">
                 <option value="P">🎭 Performances</option>
@@ -40,11 +36,12 @@
               </select>
             </div>
 
+            <ul class="nav-menu" id="nav-menu">
+              <li class="nav-item"><a href="myaccount.html" class="nav-link">My Account</a></li>
+              <li class="nav-item"><a href="about.html" class="nav-link">About</a></li>
+            </ul>
+
             <div class="nav-actions" id="nav-actions">
-              <div class="nav-user">
-                <div class="nav-user-icon">👤</div>
-                <span id="nav-user-name">User</span>
-              </div>
               <button class="nav-logout" id="nav-logout">Logout</button>
             </div>
           </div>
@@ -83,9 +80,6 @@
 
     // Highlight active page
     highlightActivePage();
-
-    // Load user info if available
-    loadUserInfo();
 
     // Setup logout handler
     setupLogoutHandler();
@@ -142,25 +136,6 @@
         link.classList.add('active');
       }
     });
-  }
-
-  /**
-   * Load user information from session storage
-   */
-  function loadUserInfo() {
-    const userNameElement = document.getElementById('nav-user-name');
-    if (!userNameElement) return;
-
-    try {
-      const sessionData = sessionStorage.getItem('av_session');
-      if (sessionData) {
-        const session = JSON.parse(sessionData);
-        const username = session.username || 'User';
-        userNameElement.textContent = username;
-      }
-    } catch (error) {
-      console.error('Error loading user info:', error);
-    }
   }
 
   /**
