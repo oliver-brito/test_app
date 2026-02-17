@@ -43,7 +43,6 @@
         document.getElementById('apiBase').value = defaults.apiBase || '';
         document.getElementById('username').value = defaults.username || '';
         document.getElementById('password').value = defaults.password || '';
-        document.getElementById('customerNumber').value = defaults.customerNumber || '1';
       }
     } catch (error) {
       console.warn('Could not load default credentials:', error);
@@ -63,8 +62,7 @@
     const credentials = {
       apiBase: document.getElementById('apiBase').value.trim(),
       username: document.getElementById('username').value.trim(),
-      password: document.getElementById('password').value,
-      customerNumber: document.getElementById('customerNumber').value.trim()
+      password: document.getElementById('password').value
     };
 
     try {
@@ -82,7 +80,7 @@
           session: data.session,
           version: data.version,
           username: credentials.username,
-          customerNumber: credentials.customerNumber
+          customerId: data.customerId
         }));
 
         // Redirect back to original page or home
