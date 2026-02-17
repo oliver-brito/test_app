@@ -138,14 +138,33 @@ export async function parseResponse(response) {
  * @returns {Promise<{response: Response, data: any}>}
  */
 export async function makeApiCall(path, payload, manual = false) {
+    const startTime = Date.now();
+    const fullUrl = `${API_BASE}${path}`;
+
     const response = await sendCall(path, payload, manual);
     await handleSetCookies(response);
     const data = await parseResponse(response);
 
+    const duration = Date.now() - startTime;
+
     // Log the response
     logApiCall(path, { body: payload }, response, data);
 
-    return { response, data };
+    // Include backend API call metadata for frontend logging
+    const apiCallMetadata = {
+        method: 'POST',
+        endpoint: fullUrl,
+        path: path,
+        status: response.status,
+        duration: duration,
+        request: {
+            body: payload,
+            timestamp: new Date().toISOString()
+        },
+        response: data
+    };
+
+    return { response, data, apiCallMetadata };
 }
 
 /**
@@ -202,18 +221,18 @@ export async function makeApiCallWithErrorHandling(
 ) {
     const { manual = false, check3ds = false } = options;
 
-    const { response, data } = await makeApiCall(path, payload, manual);
+    const { response, data, apiCallMetadata } = await makeApiCall(path, payload, manual);
 
     if (!response.ok) {
         // Check for 3DS requirement if enabled
         if (check3ds && is3dsRequired(data)) {
             printDebugMessage("3DS authentication required");
-            return { response, data, requires3ds: true };
+            return { response, data, apiCallMetadata, requires3ds: true };
         }
 
         handleApiError(res, response, data, errorMessage, path, payload);
         return null;
     }
 
-    return { response, data };
+    return { response, data, apiCallMetadata };
 }

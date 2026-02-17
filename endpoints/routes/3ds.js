@@ -46,6 +46,12 @@ router.post("/processThreeDSResponse", wrapRouteWithValidation(
         );
         if (!result) return; // Error already handled
 
+        // Collect backend API calls for frontend logging
+        const backendApiCalls = [];
+        if (result.apiCallMetadata) {
+            backendApiCalls.push(result.apiCallMetadata);
+        }
+
         /**
          * Finalize the order by calling insertOrder to complete the payment process.
          * This will insert the order and use the information in pa_response_information
@@ -58,7 +64,8 @@ router.post("/processThreeDSResponse", wrapRouteWithValidation(
         if (!actionsResp.ok) {
             return res.status(actionsResp.status).json({
                 status: actionsResp.status,
-                body: actionsJson
+                body: actionsJson,
+                backendApiCalls // Include backend API calls
             });
         }
 
@@ -75,7 +82,8 @@ router.post("/processThreeDSResponse", wrapRouteWithValidation(
             transactionId,
             actionsJson,
             respJson: result.data,
-            paymentMethod: "3DS Payment"
+            paymentMethod: "3DS Payment",
+            backendApiCalls // Include backend API calls
         }, res);
     },
     {

@@ -94,6 +94,9 @@ export async function handleThreeDS(req, res, { paymentID } = {}) {
  * @returns {Promise<{paymentID: string, payment_details: object} | null>}
  */
 export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod) {
+  // Collect all backend API calls for frontend logging
+  const backendApiCalls = [];
+
   // Step 1: Add customer
   const customerResult = await makeApiCallWithErrorHandling(
     res,
@@ -106,6 +109,7 @@ export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod
     "Checkout failed (addCustomer)"
   );
   if (!customerResult) return null;
+  if (customerResult.apiCallMetadata) backendApiCalls.push(customerResult.apiCallMetadata);
 
   // Step 2: Check if payment exists
   const checkResult = await makeApiCallWithErrorHandling(
@@ -115,6 +119,7 @@ export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod
     "Checkout failed (check payments)"
   );
   if (!checkResult) return null;
+  if (checkResult.apiCallMetadata) backendApiCalls.push(checkResult.apiCallMetadata);
 
   let paymentsObj = checkResult.data?.data?.Payments || {};
   let hasPayment = Object.values(paymentsObj).some(v => v?.payment_id?.standard);
@@ -128,6 +133,7 @@ export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod
       "Checkout failed (addPayment)"
     );
     if (!paymentResult) return null;
+    if (paymentResult.apiCallMetadata) backendApiCalls.push(paymentResult.apiCallMetadata);
     paymentsObj = paymentResult.data?.data?.Payments || {};
   }
 
@@ -141,7 +147,7 @@ export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod
   }
   if (!paymentID) {
     printDebugMessage("No paymentID found after addPayment");
-    res.status(500).json({ error: "No paymentID found after addPayment", details: paymentsObj });
+    res.status(500).json({ error: "No paymentID found after addPayment", details: paymentsObj, backendApiCalls });
     return null;
   }
 
@@ -162,6 +168,7 @@ export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod
     "Checkout failed (set delivery/payment)"
   );
   if (!setResult) return null;
+  if (setResult.apiCallMetadata) backendApiCalls.push(setResult.apiCallMetadata);
 
   // Step 5: Get payment client token
   const tokenResult = await makeApiCallWithErrorHandling(
@@ -178,6 +185,7 @@ export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod
     "Checkout failed (getPaymentClientToken)"
   );
   if (!tokenResult) return null;
+  if (tokenResult.apiCallMetadata) backendApiCalls.push(tokenResult.apiCallMetadata);
 
   // Step 6: Get payment details
   const detailsResult = await makeApiCallWithErrorHandling(
@@ -187,9 +195,11 @@ export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod
     "Checkout failed (get payment details)"
   );
   if (!detailsResult) return null;
+  if (detailsResult.apiCallMetadata) backendApiCalls.push(detailsResult.apiCallMetadata);
 
   return {
     paymentID,
-    payment_details: detailsResult.data?.data?.[`Payments::${paymentID}`]
+    payment_details: detailsResult.data?.data?.[`Payments::${paymentID}`],
+    backendApiCalls
   };
 }

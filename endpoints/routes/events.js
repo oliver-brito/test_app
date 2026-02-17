@@ -39,13 +39,21 @@ router.get("/events/upcoming", wrapRouteWithValidation(
     // Check for soft error
     if (result.data?.errorCode || /error/i.test(result.data?.message || "")) {
       printDebugMessage("Events upcoming soft error");
-      return res.status(400).json({ error: "Upstream error", details: result.data });
+      return res.status(400).json({
+        error: "Upstream error",
+        details: result.data,
+        backendApiCalls: result.apiCallMetadata ? [result.apiCallMetadata] : []
+      });
     }
 
     const resultsObj = result.data?.data?.SearchResults || {};
     const events = Object.values(resultsObj);
     printDebugMessage("Events upcoming fetched successfully");
-    res.json({ events, rawResponse: result.data });
+    res.json({
+      events,
+      rawResponse: result.data,
+      backendApiCalls: result.apiCallMetadata ? [result.apiCallMetadata] : []
+    });
   },
   { params: [], paths: ["UPCOMING_PATH"], name: "events/upcoming" }
 ));
@@ -77,7 +85,10 @@ router.post("/map/availability/:id", wrapRouteWithValidation(
     if (!result) return; // Error already handled
 
     printDebugMessage("Map availability fetched successfully");
-    res.json(result.data);
+    res.json({
+      ...result.data,
+      backendApiCalls: result.apiCallMetadata ? [result.apiCallMetadata] : []
+    });
   },
   { params: ["priceTypeId", "numSeats"], paths: ["ORDER_PATH"], name: "map/availability" }
 ));
@@ -105,11 +116,19 @@ router.get("/events/:id", wrapRouteWithValidation(
     const perf = result.data?.data?.Performance;
     if (!perf) {
       printDebugMessage("Performance not found");
-      return res.status(404).json({ error: "Performance not found", details: result.data });
+      return res.status(404).json({
+        error: "Performance not found",
+        details: result.data,
+        backendApiCalls: result.apiCallMetadata ? [result.apiCallMetadata] : []
+      });
     }
 
     printDebugMessage("Performance loaded successfully");
-    res.json({ performance: perf, rawResponse: result.data });
+    res.json({
+      performance: perf,
+      rawResponse: result.data,
+      backendApiCalls: result.apiCallMetadata ? [result.apiCallMetadata] : []
+    });
   },
   { params: [], paths: ["PERFORMANCE_PATH"], name: "events/:id" }
 ));
@@ -134,7 +153,11 @@ router.post("/map/pricing/:id", wrapRouteWithValidation(
 
     const pricetypes = result.data?.data?.pricetypes || {};
     printDebugMessage("Map pricing fetched successfully");
-    res.json({ pricetypes, rawResponse: result.data });
+    res.json({
+      pricetypes,
+      rawResponse: result.data,
+      backendApiCalls: result.apiCallMetadata ? [result.apiCallMetadata] : []
+    });
   },
   { params: [], paths: ["MAP_PATH"], name: "map/pricing" }
 ));

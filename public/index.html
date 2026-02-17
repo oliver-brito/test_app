@@ -6,6 +6,7 @@
   <title>Upcoming Events</title>
   <script src="helpers.js"></script>
   <script src="js/errorModal.js"></script>
+  <script src="js/apiDebugConsole.js"></script>
   <script src="js/apiWrapper.js"></script>
   <style>
     :root { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
@@ -41,17 +42,15 @@
   <script>
     // --- Placeholder functions (cookies removed) ---
     async function Authenticate() {
-        const r = await fetch("/login", { method: "POST" });
-        console.log("Login SAKJDFSADJKF:", r);
-        if (!r.ok) throw new Error("Login failed");
-        return r.json(); // { session, version }
+        const payload = await window.apiCall("/login", { method: "POST" });
+        console.log("Login response:", payload);
+        return payload; // { session, version }
     }
 
     async function Content(movePage) {
         // movePage is 1 (next), -1 (prev), or undefined/0 (initial)
-        const r = await fetch(`/events/upcoming?movePage=${movePage}`);
-        const payload = await r.json();
-        if (!r.ok || payload?.response?.status >= 400) {
+        const payload = await window.apiCall(`/events/upcoming?movePage=${movePage}`, { method: "GET" });
+        if (payload?.response?.status >= 400) {
             console.error("Upcoming failed:", payload);
             throw new Error(`Upcoming failed: ${payload?.status} ${payload?.statusText || ""}`);
         }
