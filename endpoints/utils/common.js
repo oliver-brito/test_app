@@ -1,5 +1,5 @@
 import dotenv from "dotenv"; // Ensure .env variables are loaded even if this file is imported before server bootstrap
-import { CURRENT_SESSION } from "../utils/sessionStore.js";
+import { CURRENT_SESSION, getApiBase } from "../utils/sessionStore.js";
 import { printDebugMessage, logApiCall } from "../utils/debug.js";
 import { authHeaders } from "../utils/authHeaders.js";
 import { parseSetCookieHeader, mergeCookiePairs } from "../utils/cookieUtils.js";
@@ -19,17 +19,26 @@ try {
     printDebugMessage(`dotenv initialization warning: ${e.message}`);
 }
 
-export const API_BASE = process.env.API_BASE || "";
+// Fallback API_BASE from .env (used only if user hasn't logged in with custom API base)
+export const FALLBACK_API_BASE = process.env.API_BASE || "";
 
-if (!API_BASE) {
-    // Fail fast so callers don't make malformed requests
-    throw new Error("API_BASE is not defined. Ensure .env contains API_BASE and file is loaded before imports.");
+/**
+ * Get the current API base URL from session (user's login input) or fallback to .env
+ */
+export function getActiveApiBase() {
+    return getApiBase() || FALLBACK_API_BASE;
+}
+
+// Backward compatibility: API_BASE getter
+export function API_BASE() {
+    return getActiveApiBase();
 }
 
 
 export function validateCall(request, expectedParams, expectedPaths, endpointName) {
     printDebugMessage(`Calling endpoint: ${endpointName}`);
-    if (!API_BASE || API_BASE.length === 0) {
+    const apiBase = getActiveApiBase();
+    if (!apiBase || apiBase.length === 0) {
         throw new Error("API_BASE is not defined");
     }
     if (!CURRENT_SESSION) {
@@ -57,10 +66,11 @@ export function validateCall(request, expectedParams, expectedPaths, endpointNam
 
 export async function sendCall(path, payload, manual=false) {
     try{
-        if (!API_BASE || API_BASE.length === 0) {
+        const apiBase = getActiveApiBase();
+        if (!apiBase || apiBase.length === 0) {
             throw new Error("API_BASE is not defined");
         }
-        const url = `${API_BASE || ''}${path || ''}`;
+        const url = `${apiBase}${path || ''}`;
         const headers = {
             ...authHeaders(),
             "Content-Type": "application/json",
@@ -139,7 +149,8 @@ export async function parseResponse(response) {
  */
 export async function makeApiCall(path, payload, manual = false) {
     const startTime = Date.now();
-    const fullUrl = `${API_BASE}${path}`;
+    const apiBase = getActiveApiBase();
+    const fullUrl = `${apiBase}${path}`;
 
     const response = await sendCall(path, payload, manual);
     await handleSetCookies(response);

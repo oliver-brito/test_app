@@ -91,10 +91,10 @@ router.post("/login", wrapRoute(async (req, res) => {
   const setCookie = r.headers.get("set-cookie");
   const cookies = setCookie ? filterCookieHeader(setCookie) : `session=${session}`;
 
-  // Save globally
-  setSession(session, cookies);
+  // Save globally including the API base URL from the user's input
+  setSession(session, cookies, apiBase);
 
-  if (isDebugMode()) console.log("Login successful");
+  if (isDebugMode()) console.log("Login successful, API base:", apiBase);
   res.json({
     session: data.session,
     version: data.version,

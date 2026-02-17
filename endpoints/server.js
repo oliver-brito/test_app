@@ -6,6 +6,7 @@ import https from "https";
 import path from "path";
 import { fileURLToPath } from "url";
 import { authHeaders } from "./utils/authHeaders.js";
+import { getApiBase } from "./utils/sessionStore.js";
 import { ENDPOINTS } from "../public/js/endpoints.js"; // Non-sensitive static paths
 
 import loginRouter from "./routes/login.js";
@@ -92,7 +93,9 @@ app.post("/proxy", async (req, res) => {
     if (/^https?:\/\//i.test(path)) {
       url = path;
     } else {
-      url = new URL(path, API_BASE).toString();
+      // Use the dynamic API base from session or fallback to .env
+      const apiBase = getApiBase() || API_BASE;
+      url = new URL(path, apiBase).toString();
     }
 
     const sanitized = { ...headers };
