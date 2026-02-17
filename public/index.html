@@ -8,6 +8,7 @@
   <script src="js/errorModal.js"></script>
   <script src="js/apiDebugConsole.js"></script>
   <script src="js/apiWrapper.js"></script>
+  <script src="js/authHelper.js"></script>
   <style>
     :root { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
     body { margin: 16px; background: #fafafa; }
@@ -40,13 +41,6 @@
   <ul id="events" class="events" aria-live="polite"></ul>
 
   <script>
-    // --- Placeholder functions (cookies removed) ---
-    async function Authenticate() {
-        const payload = await window.apiCall("/login", { method: "POST" });
-        console.log("Login response:", payload);
-        return payload; // { session, version }
-    }
-
     async function Content(movePage) {
         // movePage is 1 (next), -1 (prev), or undefined/0 (initial)
         const payload = await window.apiCall(`/events/upcoming?movePage=${movePage}`, { method: "GET" });
@@ -118,10 +112,12 @@
     }
 
     async function main(movePage) {
-      try {
-        $status.textContent = "Authorizing…";
-        const auth = await Authenticate();
+      // Check authentication and refresh server-side credentials
+      if (!(await window.checkAndRefreshAuth())) {
+        return; // Will redirect to login
+      }
 
+      try {
         $status.textContent = "Loading events…";
         const events = await Content(movePage);
         console.log(events);
@@ -137,7 +133,7 @@
       } catch (e) {
         console.error(e);
         $error.style.display = "";
-        $error.textContent = "Couldn’t load events. Please try again.";
+        $error.textContent = "Couldn't load events. Please try again.";
         $status.textContent = "Error";
       }
     }

@@ -26,6 +26,7 @@
   <script src="js/errorModal.js"></script>
   <script src="js/apiDebugConsole.js"></script>
   <script src="js/apiWrapper.js"></script>
+  <script src="js/authHelper.js"></script>
 </head>
 
 <body>
@@ -69,6 +70,11 @@
   <script src="js/submit.js"></script>
   <script>
     (async function() {
+      // Check auth and refresh server credentials before proceeding
+      if (!(await window.checkAndRefreshAuth())) {
+        return; // Will redirect to login
+      }
+
       try {
         /*
           When we load the page, we can be in two situations:
