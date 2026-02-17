@@ -17,8 +17,7 @@ router.get("/auth/defaults", (req, res) => {
   res.json({
     apiBase: process.env.API_BASE || '',
     username: process.env.UNL_USER || '',
-    password: process.env.UNL_PASSWORD || '',
-    customerNumber: process.env.CUSTOMER_NUMBER || '1'
+    password: process.env.UNL_PASSWORD || ''
   });
 });
 
@@ -35,7 +34,6 @@ router.post("/login", wrapRoute(async (req, res) => {
   const apiBase = req.body?.apiBase || process.env.API_BASE;
   const username = req.body?.username || process.env.UNL_USER;
   const password = req.body?.password || process.env.UNL_PASSWORD;
-  const customerNumber = req.body?.customerNumber || process.env.CUSTOMER_NUMBER || '1';
 
   const url = new URL(ENDPOINTS.AUTH, apiBase).toString();
   const body = { userid: username, password: password };
@@ -94,12 +92,71 @@ router.post("/login", wrapRoute(async (req, res) => {
   // Save globally including the API base URL from the user's input
   setSession(session, cookies, apiBase);
 
-  if (isDebugMode()) console.log("Login successful, API base:", apiBase);
+  // Validate that user has a customer_id assigned
+  const userUrl = new URL('/app/WebAPI/v2/user', apiBase).toString();
+  const userBody = {
+    session: {
+      get: ["customer_id"]
+    }
+  };
+
+  const userStartTime = Date.now();
+  const userResponse = await fetch(userUrl, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Cookie: cookies
+    },
+    body: JSON.stringify(userBody)
+  });
+
+  const userDuration = Date.now() - userStartTime;
+  const userData = await parseResponse(userResponse);
+
+  // Create API call metadata for user validation
+  const userApiCallMetadata = {
+    method: 'POST',
+    endpoint: userUrl,
+    status: userResponse.status,
+    request: {
+      method: 'POST',
+      endpoint: userUrl,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Cookie: cookies
+      },
+      body: userBody,
+      timestamp: new Date().toISOString()
+    },
+    response: userData,
+    duration: userDuration
+  };
+
+  // Check if customer_id is empty or missing
+  const customerIdObj = userData?.data?.customer_id;
+  const customerId = customerIdObj?.standard?.trim() || '';
+
+  if (!customerId) {
+    if (isDebugMode()) console.log("Login failed: No customer assigned to user. Customer ID object:", customerIdObj);
+    return res.status(400).json({
+      error: "Please log in with a user that has a customer assigned to it",
+      details: "No customer_id found for this user",
+      endpoint: userUrl,
+      status: 400,
+      request: userApiCallMetadata.request,
+      response: userData,
+      backendApiCalls: [apiCallMetadata, userApiCallMetadata]
+    });
+  }
+
+  if (isDebugMode()) console.log("Login successful, customer_id:", customerId, ", API base:", apiBase);
   res.json({
     session: data.session,
     version: data.version,
-    customerNumber: customerNumber,
-    backendApiCalls: [apiCallMetadata]
+    customerId: customerId,
+    backendApiCalls: [apiCallMetadata, userApiCallMetadata]
   });
 }));
 

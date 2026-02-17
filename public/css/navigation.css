@@ -1,0 +1,230 @@
+/* Navigation Menu Styles */
+.nav-container {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.nav-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 60px;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.nav-brand:hover {
+  opacity: 0.9;
+}
+
+.nav-logo {
+  font-size: 1.5rem;
+}
+
+.nav-menu {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 8px;
+}
+
+.nav-item {
+  position: relative;
+}
+
+.nav-link {
+  display: block;
+  padding: 8px 16px;
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.nav-link.active {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.nav-filter {
+  position: relative;
+}
+
+.nav-filter-select {
+  padding: 8px 32px 8px 12px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='white' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
+.nav-filter-select:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.nav-filter-select:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.nav-filter-select option {
+  background: #764ba2;
+  color: #fff;
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nav-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  font-size: 0.875rem;
+}
+
+.nav-user-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.nav-logout {
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nav-logout:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Mobile Menu Toggle */
+.nav-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 8px;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .nav-toggle {
+    display: block;
+  }
+
+  .navigation {
+    flex-wrap: wrap;
+  }
+
+  .nav-filter {
+    order: 3;
+    width: 100%;
+    padding: 8px 0;
+  }
+
+  .nav-filter-select {
+    width: 100%;
+  }
+
+  .nav-menu {
+    position: absolute;
+    top: 60px;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    flex-direction: column;
+    gap: 0;
+    padding: 8px 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    display: none;
+  }
+
+  .nav-menu.active {
+    display: flex;
+  }
+
+  .nav-link {
+    padding: 12px 24px;
+    border-radius: 0;
+  }
+
+  .nav-actions {
+    position: absolute;
+    top: 60px;
+    right: 0;
+    left: 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    flex-direction: column;
+    padding: 8px 16px 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    display: none;
+  }
+
+  .nav-actions.active {
+    display: flex;
+  }
+
+  .nav-user {
+    width: 100%;
+    justify-content: center;
+    padding: 8px 0;
+  }
+
+  .nav-logout {
+    width: 100%;
+  }
+}

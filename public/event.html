@@ -4,16 +4,20 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Event Details</title>
+  <link rel="stylesheet" href="css/navigation.css">
   <link rel="stylesheet" href="css/event.css">
   <script src="js/helpers.js"></script>
   <script src="js/errorModal.js"></script>
   <script src="js/apiDebugConsole.js"></script>
   <script src="js/apiWrapper.js"></script>
   <script src="js/authHelper.js"></script>
+  <script src="js/navigation.js"></script>
 </head>
 <body>
+  <!-- Navigation (loaded by navigation.js) -->
+  <div id="app-navigation"></div>
+
   <div class="container">
-    <a class="link" href="index.html">← Back to events</a>
     <h1 id="title">Loading…</h1>
 
     <div id="error" class="error" style="display:none;"></div>

@@ -13,11 +13,12 @@ const router = express.Router();
 router.get("/events/upcoming", wrapRouteWithValidation(
   async (req, res) => {
     const movePage = parseInt(req.query.movePage);
+    const objectType = req.query.objectType || "P"; // Default to Performances
     const method = movePage === 1 ? "nextPage" : movePage === -1 ? "prevPage" : "search";
     const payload = {
       actions: [{ method }],
       set: {
-        "SearchCriteria::object_type_filter": "",
+        "SearchCriteria::object_type_filter": objectType,
         "SearchCriteria::search_criteria": "",
         "SearchCriteria::search_from": "",
         "SearchCriteria::search_to": ""

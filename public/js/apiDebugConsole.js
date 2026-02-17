@@ -139,6 +139,25 @@
         .section-toggle:hover {
           background: #3e3e3e;
         }
+        .copy-btn {
+          background: rgba(76, 175, 80, 0.2);
+          border: 1px solid rgba(76, 175, 80, 0.4);
+          color: #4caf50;
+          padding: 3px 8px;
+          border-radius: 3px;
+          font-size: 10px;
+          cursor: pointer;
+          transition: all 0.2s;
+          margin-left: 8px;
+        }
+        .copy-btn:hover {
+          background: rgba(76, 175, 80, 0.3);
+          border-color: rgba(76, 175, 80, 0.6);
+        }
+        .copy-btn.copied {
+          background: rgba(76, 175, 80, 0.4);
+          color: #fff;
+        }
         .section-content {
           display: block;
           background: #252526;
@@ -294,6 +313,25 @@
     }
   }
 
+  // Copy to clipboard with visual feedback
+  function copyToClipboard(text, buttonId) {
+    navigator.clipboard.writeText(text).then(() => {
+      const button = document.getElementById(buttonId);
+      if (button) {
+        const originalText = button.textContent;
+        button.textContent = '✓ Copied!';
+        button.classList.add('copied');
+        setTimeout(() => {
+          button.textContent = originalText;
+          button.classList.remove('copied');
+        }, 2000);
+      }
+    }).catch(err => {
+      console.error('Failed to copy to clipboard:', err);
+      alert('Failed to copy to clipboard');
+    });
+  }
+
   // Add a log entry
   function addLogEntry(logData) {
     const timestamp = new Date().toLocaleTimeString();
@@ -383,36 +421,42 @@
           </div>
           <div class="log-body">
             <!-- Request Section -->
-            <div class="section-toggle" onclick="
-              const content = document.getElementById('${requestId}');
-              const arrow = this.querySelector('.section-arrow');
-              if (content.style.display === 'none') {
-                content.style.display = 'block';
-                arrow.textContent = '▼';
-              } else {
-                content.style.display = 'none';
-                arrow.textContent = '▶';
-              }
-            ">
-              <span><span class="section-arrow">▼</span> Request</span>
+            <div class="section-toggle">
+              <span onclick="
+                const content = document.getElementById('${requestId}');
+                const arrow = this.querySelector('.section-arrow');
+                if (content.style.display === 'none') {
+                  content.style.display = 'block';
+                  arrow.textContent = '▼';
+                } else {
+                  content.style.display = 'none';
+                  arrow.textContent = '▶';
+                }
+              " style="cursor: pointer; flex: 1;">
+                <span class="section-arrow">▼</span> Request
+              </span>
+              <button class="copy-btn" id="copy-req-${index}" onclick="event.stopPropagation(); window.apiDebugConsole._copyLogData(${index}, 'request', 'copy-req-${index}');">Copy</button>
             </div>
             <div id="${requestId}" class="section-content" style="display:block;">
               ${log.request ? renderCollapsibleJSON(log.request) : '<span style="color:#6b7280;">No request data</span>'}
             </div>
 
             <!-- Response Section -->
-            <div class="section-toggle" onclick="
-              const content = document.getElementById('${responseId}');
-              const arrow = this.querySelector('.section-arrow');
-              if (content.style.display === 'none') {
-                content.style.display = 'block';
-                arrow.textContent = '▼';
-              } else {
-                content.style.display = 'none';
-                arrow.textContent = '▶';
-              }
-            ">
-              <span><span class="section-arrow">▼</span> Response</span>
+            <div class="section-toggle">
+              <span onclick="
+                const content = document.getElementById('${responseId}');
+                const arrow = this.querySelector('.section-arrow');
+                if (content.style.display === 'none') {
+                  content.style.display = 'block';
+                  arrow.textContent = '▼';
+                } else {
+                  content.style.display = 'none';
+                  arrow.textContent = '▶';
+                }
+              " style="cursor: pointer; flex: 1;">
+                <span class="section-arrow">▼</span> Response
+              </span>
+              <button class="copy-btn" id="copy-res-${index}" onclick="event.stopPropagation(); window.apiDebugConsole._copyLogData(${index}, 'response', 'copy-res-${index}');">Copy</button>
             </div>
             <div id="${responseId}" class="section-content" style="display:block;">
               ${log.response ? renderCollapsibleJSON(log.response) : '<span style="color:#6b7280;">No response data</span>'}
@@ -486,6 +530,19 @@
       sessionStorage.removeItem(STORAGE_KEY_LOGS);
       renderLogs();
       updateCallCount();
+    },
+    _copyLogData: (index, type, buttonId) => {
+      const log = apiCallLogs[index];
+      if (!log) return;
+
+      const data = type === 'request' ? log.request : log.response;
+      if (!data) {
+        alert('No data to copy');
+        return;
+      }
+
+      const jsonText = JSON.stringify(data, null, 2);
+      copyToClipboard(jsonText, buttonId);
     }
   };
 

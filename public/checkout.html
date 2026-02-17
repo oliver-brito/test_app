@@ -22,14 +22,19 @@
 	     integrity="sha384-GQvTx/DKyDwPrqukLGTOBzAUHwXJkuUv8vwhr0ynfUapxHMCrzk84rMbd3Q/i74t"
 	     crossorigin="anonymous">
 
+  <link rel="stylesheet" href="css/navigation.css">
   <link rel="stylesheet" href="css/checkout.css">
   <script src="js/errorModal.js"></script>
   <script src="js/apiDebugConsole.js"></script>
   <script src="js/apiWrapper.js"></script>
   <script src="js/authHelper.js"></script>
+  <script src="js/navigation.js"></script>
 </head>
 
 <body>
+  <!-- Navigation (loaded by navigation.js) -->
+  <div id="app-navigation"></div>
+
   <div class="container">
     <h1>Checkout</h1>
     <div id="result" class="summary">Loading…</div>
