@@ -4,15 +4,21 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Upcoming Events</title>
+  <link rel="stylesheet" href="css/navigation.css">
   <link rel="stylesheet" href="css/index.css">
   <script src="js/helpers.js"></script>
   <script src="js/errorModal.js"></script>
   <script src="js/apiDebugConsole.js"></script>
   <script src="js/apiWrapper.js"></script>
   <script src="js/authHelper.js"></script>
+  <script src="js/navigation.js"></script>
 </head>
 <body>
-  <div class="row">
+  <!-- Navigation (loaded by navigation.js) -->
+  <div id="app-navigation"></div>
+
+  <div style="padding: 16px;">
+    <div class="row">
     <h1>Upcoming Events</h1>
     <span id="status" class="loading">Loading…</span>
     <button id="prevPage">&#8592;</button>
@@ -20,6 +26,7 @@
   </div>
   <div id="error" class="error" style="display:none;"></div>
   <ul id="events" class="events" aria-live="polite"></ul>
+  </div>
 
   <script src="js/index.js"></script>
 </body>
