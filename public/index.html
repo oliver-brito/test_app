@@ -4,31 +4,12 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Upcoming Events</title>
+  <link rel="stylesheet" href="css/index.css">
   <script src="helpers.js"></script>
   <script src="js/errorModal.js"></script>
   <script src="js/apiDebugConsole.js"></script>
   <script src="js/apiWrapper.js"></script>
   <script src="js/authHelper.js"></script>
-  <style>
-    :root { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
-    body { margin: 16px; background: #fafafa; }
-    h1 { font-size: 1.75rem; margin: 0 0 16px; }
-    .events { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
-    .card { display: flex; gap: 12px; align-items: center; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
-    .thumb { width: 25%; max-width: 220px; height: 160px; object-fit: cover; border-radius: 8px; background: #f3f4f6; }
-    .meta { flex: 1; min-width: 0; }
-    .title { font-weight: 600; font-size: 1.125rem; margin: 0 0 4px; }
-    .muted { color: #6b7280; margin: 2px 0; }
-    .badge { display: inline-flex; align-items: center; background: #ecfdf5; color: #065f46; border: 1px solid rgba(5,150,105,.25); border-radius: 999px; padding: 2px 8px; font-size: .75rem; font-weight: 600; margin-top: 6px; }
-    .buy { appearance: none; text-decoration: none; background: #3b82f6; color: #fff; border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-    .row { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-    .error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; padding: 10px; border-radius: 8px; margin: 10px 0; }
-    .loading { color: #6b7280; }
-    @media (max-width: 720px) {
-      .card { flex-direction: column; align-items: stretch; }
-      .thumb { width: 100%; height: 200px; }
-    }
-  </style>
 </head>
 <body>
   <div class="row">
@@ -40,108 +21,6 @@
   <div id="error" class="error" style="display:none;"></div>
   <ul id="events" class="events" aria-live="polite"></ul>
 
-  <script>
-    async function Content(movePage) {
-        // movePage is 1 (next), -1 (prev), or undefined/0 (initial)
-        const payload = await window.apiCall(`/events/upcoming?movePage=${movePage}`, { method: "GET" });
-        if (payload?.response?.status >= 400) {
-            console.error("Upcoming failed:", payload);
-            throw new Error(`Upcoming failed: ${payload?.status} ${payload?.statusText || ""}`);
-        }
-        return payload.events;
-    }
-        // -------------------------------------------------
-
-    const $status = document.getElementById("status");
-    const $error  = document.getElementById("error");
-    const $list   = document.getElementById("events");
-    const $prevPage = document.getElementById("prevPage");
-    const $nextPage = document.getElementById("nextPage");
-
-    // fallbackImage is now provided by helpers.js
-
-    function createEventItem(event) {
-      const li = document.createElement("li");
-      li.className = "card";
-
-      const img = document.createElement("img");
-      img.className = "thumb";
-      img.alt = event.name?.standard || "Event image";
-      img.src = fallbackImage(event.image1?.standard || "");
-      img.onerror = () => { img.src = "av.webp"; };
-
-      const meta = document.createElement("div");
-      meta.className = "meta";
-
-      const h2 = document.createElement("h2");
-      h2.className = "title";
-      h2.textContent = event.name?.standard ?? "Untitled event";
-
-      const p1 = document.createElement("p");
-      p1.className = "muted";
-      p1.textContent = "Start Date: " + (event.start_date?.display ?? "—");
-
-      const p2 = document.createElement("p");
-      p2.className = "muted";
-      p2.textContent = "End Date: " + (event.end_date?.display ?? "—");
-
-      const p3 = document.createElement("p");
-      p3.className = "muted";
-      p3.textContent = "Location: " + (event.city?.standard ?? "—");
-
-      const badge = document.createElement("span");
-      badge.className = "badge";
-      badge.textContent = "Available Seats: " + (event.availability_num?.standard ?? "—");
-
-      const buy = document.createElement("a");
-      buy.className = "buy";
-      buy.textContent = "Buy";
-      buy.href = `event.html?id=${encodeURIComponent(event.id?.standard ?? "")}`;
-
-      meta.appendChild(h2);
-      meta.appendChild(p1);
-      meta.appendChild(p2);
-      meta.appendChild(p3);
-      meta.appendChild(badge);
-
-      li.appendChild(img);
-      li.appendChild(meta);
-      li.appendChild(buy);
-
-      return li;
-    }
-
-    async function main(movePage) {
-      // Check authentication and refresh server-side credentials
-      if (!(await window.checkAndRefreshAuth())) {
-        return; // Will redirect to login
-      }
-
-      try {
-        $status.textContent = "Loading events…";
-        const events = await Content(movePage);
-        console.log(events);
-        $list.innerHTML = "";
-        if (!events || events.length === 0) {
-          $list.insertAdjacentHTML("beforeend", `<li class="muted">No upcoming events.</li>`);
-        } else {
-          for (const ev of events) {
-            $list.appendChild(createEventItem(ev));
-          }
-        }
-        $status.textContent = `${events?.length ?? 0} event(s)`;
-      } catch (e) {
-        console.error(e);
-        $error.style.display = "";
-        $error.textContent = "Couldn't load events. Please try again.";
-        $status.textContent = "Error";
-      }
-    }
-
-    $prevPage.addEventListener("click", () => main(-1));
-    $nextPage.addEventListener("click", () => main(1));
-
-    main();
-  </script>
+  <script src="js/index.js"></script>
 </body>
 </html>

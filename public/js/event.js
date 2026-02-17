@@ -1,0 +1,301 @@
+// Event details page functionality
+(function() {
+  'use strict';
+
+  const $title = document.getElementById("title");
+  const $image = document.getElementById("image");
+  const $desc = document.getElementById("desc");
+  const $start = document.getElementById("start");
+  const $end = document.getElementById("end");
+  const $venue = document.getElementById("venue");
+  const $city = document.getElementById("city");
+  const $avail = document.getElementById("avail");
+  const $price = document.getElementById("price");
+  const $error = document.getElementById("error");
+  const $seats = document.getElementById("seats");
+  const $num = document.getElementById("num");
+  const $pricetype = document.getElementById("pricetype");
+  const $pricetype_value = document.getElementById("pricetype_value");
+  const $best = document.getElementById("best");
+  const $checkout = document.getElementById("checkout");
+
+  const params = new URLSearchParams(location.search);
+  const eventId = params.get("id");
+
+  /**
+   * Render event details on the page
+   * @param {Object} ev - Event data object
+   */
+  function renderEvent(ev) {
+    // Title (prefer short_description if present)
+    $title.textContent = avText(ev.short_description) || avText(ev.name) || "Untitled event";
+
+    // Image (fallback chain since there's no image1 here)
+    const imgSrc = avImg(ev.logo1, ev.alternative_overview_image, ev.thumbnail, ev.app_image);
+    $image.src = fallbackImage(imgSrc);
+
+    // Description
+    $desc.textContent = avText(ev.description) || "";
+
+    // Dates (handle arrays in display)
+    $start.textContent = avText(ev.start_date) || "—";
+    $end.textContent = avText(ev.end_date) || "—";
+
+    // Venue (performance payload has venue_short_description, not venue_name)
+    $venue.textContent = avText(ev.venue_short_description) || "—";
+
+    // City not provided by performance.load
+    $city.textContent = "—";
+
+    // Price range not provided here
+    $price.textContent = "—";
+
+    // Availability: use total_seats as a coarse indicator (no live availability here)
+    $avail.textContent = avText(ev.total_seats) || "—";
+  }
+
+  /**
+   * Render seats list with remove functionality
+   * @param {Array} list - Array of seat objects
+   */
+  function renderSeats(list) {
+    $seats.innerHTML = "";
+    // Only keep seats with state 24
+    const filtered = (list || []).filter(s => String(s.state) === "24");
+    if (filtered.length === 0) {
+      $seats.insertAdjacentHTML("beforeend", `<li class="muted">No seats selected yet.</li>`);
+      return;
+    }
+    for (const s of filtered) {
+      const li = document.createElement("li");
+      li.className = "seat";
+      li.innerHTML = `
+        <div>
+          <div><strong>Row:</strong> ${s.row?.standard ?? "—"}</div>
+          <div><strong>Seat:</strong> ${s.seat?.standard ?? "—"}</div>
+          <div><strong>Aisle:</strong> ${s.aisle?.standard ?? "—"}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <strong>${s.net?.display ?? "—"}</strong>
+          <button class="remove-seat-btn" title="Remove seat" style="background:#ef4444;color:#fff;border:none;border-radius:50%;width:28px;height:28px;font-weight:bold;font-size:16px;cursor:pointer;line-height:1;">&times;</button>
+        </div>
+      `;
+      // Add click handler to the X button
+      const btn = li.querySelector('.remove-seat-btn');
+      if (btn) {
+        btn.onclick = async function(e) {
+          e.stopPropagation();
+          if (!s.admission_id || !s.admission_id.standard) {
+            alert('No admission id found for this seat.');
+            return;
+          }
+          const admissionId = s.admission_id.standard;
+          try {
+            const result = await window.apiCall('/removeSeat', {
+              body: { admissionId }
+            });
+            alert('Seat removal requested (id: ' + admissionId + ').');
+            refreshSeats(); // Refresh seat list from /order
+          } catch (err) {
+            alert('Error removing seat (id: ' + admissionId + '): ' + err.message);
+          }
+        };
+      }
+      $seats.appendChild(li);
+    }
+  }
+
+  /**
+   * Refresh seats by calling /order and rendering seats with state 24
+   */
+  async function refreshSeats() {
+    try {
+      const data = await window.apiCall('/order', { method: 'GET' });
+      // Extract Admissions from order
+      const admissions = data?.rawResponse?.data?.Admissions || data?.admissions || {};
+      const seatRows = Object.entries(admissions)
+        .filter(([k]) => k !== "state")
+        .map(([, v]) => v);
+      const pseudoSeats = seatRows.map((row) => ({
+        row: { standard: row?.row?.standard ?? "—" },
+        seat: { standard: row?.seat?.standard ?? "—" },
+        aisle: { standard: row?.aisle?.standard ?? "—" },
+        net: { display: row?.net?.display ?? "" },
+        admission_id: { standard: row?.admission_id?.standard ?? "" },
+        state: row?.state
+      }));
+      renderSeats(pseudoSeats);
+    } catch (e) {
+      showError('Could not refresh seats: ' + e.message);
+    }
+  }
+
+  /**
+   * Load event details from API
+   */
+  async function loadEvent() {
+    if (!eventId) {
+      showError("Missing event id.");
+      return;
+    }
+    try {
+      const ev = await window.apiCall(`/events/${encodeURIComponent(eventId)}`, {
+        method: 'GET'
+      });
+      renderEvent(ev);
+      console.log("Event loaded:", ev);
+    } catch (e) {
+      console.error(e);
+      showError("Couldn't load event. Please try again.");
+    }
+  }
+
+  /**
+   * Get best available seats and populate delivery/payment methods
+   */
+  async function getBestAvailable() {
+    const n = Math.max(1, parseInt($num.value, 10) || 1);
+    const priceTypeId = $pricetype.value;
+    try {
+      const data = await window.apiCall(`/map/availability/${encodeURIComponent(eventId)}`, {
+        body: { numSeats: n, priceTypeId }
+      });
+      console.log("Best available loaded:", data);
+
+      // Admissions (seats)
+      const admissions = data?.data?.Admissions || {};
+      const seatRows = Object.entries(admissions)
+        .filter(([k]) => k !== "state")
+        .map(([, v]) => v);
+      const pseudoSeats = seatRows.map((row) => ({
+        row: { standard: row?.row?.standard ?? "—" },
+        seat: { standard: row?.seat?.standard ?? "—" },
+        aisle: { standard: row?.aisle?.standard ?? "—" },
+        net: { display: row?.net?.display ?? "" },
+        admission_id: { standard: row?.admission_id?.standard ?? "" },
+        state: row?.state
+      }));
+      console.log(admissions, seatRows, pseudoSeats);
+      renderSeats(pseudoSeats);
+      $checkout.style.display = "";
+
+      // Render Delivery Methods dropdown
+      let $delivery = document.getElementById("delivery");
+      if (!$delivery) {
+        $delivery = document.createElement("select");
+        $delivery.id = "delivery";
+        $delivery.className = "input";
+        $delivery.style.marginLeft = "10px";
+        $checkout.parentNode.insertBefore($delivery, $checkout);
+      }
+      $delivery.innerHTML = "";
+      const delivery = data?.data?.DeliveryMethodDetails || {};
+      Object.entries(delivery).forEach(([id, d]) => {
+        if (id === "state") return;
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = d?.name?.display || d?.name?.standard || id;
+        $delivery.appendChild(opt);
+      });
+
+      // Render Payment Methods dropdown
+      let $payment = document.getElementById("payment");
+      if (!$payment) {
+        $payment = document.createElement("select");
+        $payment.id = "payment";
+        $payment.className = "input";
+        $payment.style.marginLeft = "10px";
+        $delivery.parentNode.insertBefore($payment, $delivery.nextSibling);
+      }
+      $payment.innerHTML = "";
+      const payment = data?.data?.AvailablePaymentMethods || {};
+      Object.entries(payment).forEach(([id, p]) => {
+        if (id === "state") return;
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = p?.name?.display || p?.name?.standard || id;
+        $payment.appendChild(opt);
+      });
+    } catch (e) {
+      console.error(e);
+      showError("Couldn't load availability. Please try again.");
+    }
+  }
+
+  /**
+   * Fetch price types from /map/pricing/:id and populate dropdown
+   */
+  async function populatePriceTypes() {
+    console.log("Loading price types for event:", eventId);
+    $pricetype.innerHTML = '';
+    if (!eventId) return;
+    try {
+      const data = await window.apiCall(`/map/pricing/${encodeURIComponent(eventId)}`, {
+        body: {}
+      });
+      console.log("Price types loaded:", data);
+      const pricetypes = data.pricetypes;
+      if (pricetypes && typeof pricetypes === "object") {
+        Object.entries(pricetypes).forEach(([id, pt]) => {
+          if (id === "state") return;
+          const name = pt?.name?.display || pt?.name?.standard || id;
+          const opt = document.createElement("option");
+          opt.value = id;
+          opt.textContent = name;
+          $pricetype.appendChild(opt);
+        });
+      }
+      $pricetype_value.value = $pricetype.value || "";
+    } catch (e) {
+      showError("Couldn't load price types. Please try again.");
+    }
+  }
+
+  /**
+   * Handle checkout button click
+   */
+  function handleCheckout(e) {
+    e.preventDefault();
+    const $delivery = document.getElementById("delivery");
+    const $payment = document.getElementById("payment");
+    const deliveryMethod = $delivery ? $delivery.value : null;
+    const paymentMethod = $payment ? $payment.value : null;
+    if (!deliveryMethod || !paymentMethod) {
+      showError("Please select a delivery and payment method.");
+      return;
+    }
+
+    // Get event information for the order
+    const eventName = document.getElementById("title").textContent || "Unknown Event";
+    const eventDate = document.getElementById("start").textContent || "TBD";
+
+    // Save to localStorage for checkout.html to read
+    localStorage.setItem('deliveryMethod', deliveryMethod);
+    localStorage.setItem('paymentMethod', paymentMethod);
+    localStorage.setItem('eventId', eventId);
+    localStorage.setItem('eventName', eventName);
+    localStorage.setItem('eventDate', eventDate);
+
+    window.location.href = "checkout.html";
+  }
+
+  // Event listeners
+  $pricetype.addEventListener("change", function() {
+    $pricetype_value.value = $pricetype.value;
+  });
+
+  $best.addEventListener("click", getBestAvailable);
+  $checkout.addEventListener("click", handleCheckout);
+
+  // Check auth before loading content
+  (async function() {
+    if (!(await window.checkAndRefreshAuth())) {
+      return; // Will redirect to login
+    }
+
+    // Initialize page after auth check
+    loadEvent();
+    renderSeats([]); // initial
+    populatePriceTypes();
+  })();
+})();
