@@ -39,18 +39,34 @@
       // Clone response to read it without consuming it
       const clonedResponse = response.clone();
 
+      // Parse response data first to check for auth errors
+      let responseData;
+      try {
+        responseData = await clonedResponse.json();
+      } catch {
+        try {
+          responseData = await clonedResponse.text();
+        } catch {
+          responseData = 'Unable to read response';
+        }
+      }
+
+      // Check for authentication errors (status codes or error messages)
+      const isAuthError = (response.status === 401 || response.status === 403) ||
+                          (responseData && typeof responseData === 'object' &&
+                           (responseData.error === 'Not authenticated' ||
+                            responseData.error === 'Auth failed' ||
+                            responseData.details === 'Not authenticated'));
+
+      if (isAuthError && showErrorModal) {
+        const currentPath = window.location.pathname + window.location.search;
+        const returnUrl = encodeURIComponent(currentPath);
+        window.location.href = `/login.html?session_expired=true&return_url=${returnUrl}`;
+        return;
+      }
+
       // Only show error modal for failed requests
       if (!response.ok && showErrorModal) {
-        let responseData;
-        try {
-          responseData = await clonedResponse.json();
-        } catch {
-          try {
-            responseData = await clonedResponse.text();
-          } catch {
-            responseData = 'Unable to read response';
-          }
-        }
 
         // Check if backend already provided structured error data
         if (responseData && typeof responseData === 'object' && responseData.error) {
