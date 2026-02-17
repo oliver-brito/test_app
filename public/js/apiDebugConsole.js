@@ -210,14 +210,14 @@
     });
   }
 
-  // Render collapsible JSON (reuse from error modal concept)
+  // Render collapsible JSON with proper JSON syntax (like VS Code)
   function renderCollapsibleJSON(obj, level = 0) {
     if (obj === null || obj === undefined) {
-      return `<span style="color:#6b7280;">${String(obj)}</span>`;
+      return `<span style="color:#569cd6;">${String(obj)}</span>`;
     }
 
     if (typeof obj !== 'object') {
-      const color = typeof obj === 'string' ? '#ce9178' : typeof obj === 'number' ? '#b5cea8' : '#569cd6';
+      const color = typeof obj === 'string' ? '#ce9178' : typeof obj === 'number' ? '#b5cea8' : typeof obj === 'boolean' ? '#569cd6' : '#d4d4d4';
       return `<span style="color:${color};">${JSON.stringify(obj)}</span>`;
     }
 
@@ -225,51 +225,54 @@
     const entries = Object.entries(obj);
 
     if (entries.length === 0) {
-      return `<span style="color:#6b7280;">${isArray ? '[]' : '{}'}</span>`;
+      return `<span style="color:#d4d4d4;">${isArray ? '[]' : '{}'}</span>`;
     }
 
-    let html = '<div style="margin-left:' + (level > 0 ? '16px' : '0') + ';">';
+    const uniqueId = 'json-' + Math.random().toString(36).substr(2, 9);
+    const openBrace = isArray ? '[' : '{';
+    const closeBrace = isArray ? ']' : '}';
+
+    let html = `
+      <span style="color:#d4d4d4;">${openBrace}</span>
+      <span onclick="
+        const content = document.getElementById('${uniqueId}');
+        const ellipsis = document.getElementById('${uniqueId}-ellipsis');
+        if (content.style.display === 'none') {
+          content.style.display = 'block';
+          ellipsis.style.display = 'none';
+        } else {
+          content.style.display = 'none';
+          ellipsis.style.display = 'inline';
+        }
+      " style="cursor:pointer; user-select:none;">
+        <span id="${uniqueId}-ellipsis" style="display:none; color:#858585; margin:0 4px;">...</span>
+      </span>
+      <div id="${uniqueId}" style="display:block;">
+    `;
 
     entries.forEach(([key, value], index) => {
-      const hasChildren = typeof value === 'object' && value !== null && Object.keys(value).length > 0;
-      const uniqueId = 'json-' + Math.random().toString(36).substr(2, 9);
+      const isLastEntry = index === entries.length - 1;
 
-      html += '<div style="margin-bottom:2px;">';
+      html += '<div style="margin-left:16px;">';
 
-      if (hasChildren) {
-        html += `
-          <div style="display:flex; align-items:flex-start; gap:6px;">
-            <span onclick="
-              const content = document.getElementById('${uniqueId}');
-              const arrow = this;
-              if (content.style.display === 'none') {
-                content.style.display = 'block';
-                arrow.textContent = '▼';
-              } else {
-                content.style.display = 'none';
-                arrow.textContent = '▶';
-              }
-            " style="cursor:pointer; color:#6b7280; font-size:10px; user-select:none; width:12px;">▶</span>
-            <span style="color:#9cdcfe; font-weight:600;">${isArray ? '[' + key + ']' : key}:</span>
-            <span style="color:#6b7280; font-style:italic; font-size:10px;">
-              ${Array.isArray(value) ? 'Array(' + Object.keys(value).length + ')' : 'Object{' + Object.keys(value).length + '}'}
-            </span>
-          </div>
-          <div id="${uniqueId}" style="display:none; margin-left:18px;">
-            ${renderCollapsibleJSON(value, level + 1)}
-          </div>
-        `;
-      } else {
-        html += `
-          <span style="color:#9cdcfe; font-weight:600;">${isArray ? '[' + key + ']' : key}:</span>
-          <span style="margin-left:6px;">${renderCollapsibleJSON(value, level + 1)}</span>
-        `;
+      // Render key (for objects only)
+      if (!isArray) {
+        html += `<span style="color:#9cdcfe;">"${key}"</span><span style="color:#d4d4d4;">: </span>`;
+      }
+
+      // Render value
+      html += renderCollapsibleJSON(value, level + 1);
+
+      // Add comma if not last entry
+      if (!isLastEntry) {
+        html += '<span style="color:#d4d4d4;">,</span>';
       }
 
       html += '</div>';
     });
 
-    html += '</div>';
+    html += `</div><span style="color:#d4d4d4;">${closeBrace}</span>`;
+
     return html;
   }
 
