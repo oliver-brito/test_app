@@ -6,7 +6,7 @@ import https from "https";
 import path from "path";
 import { fileURLToPath } from "url";
 import { authHeaders } from "./utils/authHeaders.js";
-import { ENDPOINTS } from "../public/endpoints.js"; // Non-sensitive static paths
+import { ENDPOINTS } from "../public/js/endpoints.js"; // Non-sensitive static paths
 
 import loginRouter from "./routes/login.js";
 import eventsRouter from "./routes/events.js";

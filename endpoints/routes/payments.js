@@ -1,6 +1,6 @@
 // routes/payments.js (refactored to use common helpers)
 import express from "express";
-import { ENDPOINTS } from "../../public/endpoints.js";
+import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
 import { parseResponse, handleSetCookies, is3dsRequired } from "../utils/common.js";
 import { insertOrder, redirectToViewOrder, handleThreeDS, executeCheckoutSequence } from "./common.js";

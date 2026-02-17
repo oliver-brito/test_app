@@ -1,4 +1,4 @@
-import { ENDPOINTS } from '../../public/endpoints.js';
+import { ENDPOINTS } from '../../public/js/endpoints.js';
 import { sendCall, validateCall, handleSetCookies, makeApiCallWithErrorHandling } from '../utils/common.js';
 import { printDebugMessage } from '../utils/debug.js';
 

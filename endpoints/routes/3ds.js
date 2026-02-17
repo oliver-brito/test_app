@@ -3,7 +3,7 @@ import express from "express";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import { ENDPOINTS } from "../../public/endpoints.js"; // public endpoints constants
+import { ENDPOINTS } from "../../public/js/endpoints.js"; // public endpoints constants
 import { makeApiCallWithErrorHandling, parseResponse, handleSetCookies } from "../utils/common.js"; // shared validation & fetch & cookie wrapper
 import { insertOrder, redirectToViewOrder } from "./common.js"; // order helpers
 import { wrapRouteWithValidation } from "../utils/routeWrapper.js";

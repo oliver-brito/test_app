@@ -1,6 +1,6 @@
 // endpoints/routes/events.js (refactored to use common helpers)
 import express from "express";
-import { ENDPOINTS } from "../../public/endpoints.js";
+import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
 import { makeApiCallWithErrorHandling } from "../utils/common.js";
 import { wrapRouteWithValidation } from "../utils/routeWrapper.js";
@@ -17,7 +17,7 @@ router.get("/events/upcoming", wrapRouteWithValidation(
     const payload = {
       actions: [{ method }],
       set: {
-        "SearchCriteria::object_type_filter": "P",
+        "SearchCriteria::object_type_filter": "",
         "SearchCriteria::search_criteria": "",
         "SearchCriteria::search_from": "",
         "SearchCriteria::search_to": ""

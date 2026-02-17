@@ -1,7 +1,7 @@
 // endpoints/routes/details.js
 import express from "express";
 import { printDebugMessage } from "../utils/debug.js";
-import { ENDPOINTS } from "../../public/endpoints.js";
+import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { makeApiCallWithErrorHandling } from "../utils/common.js";
 import { wrapRouteWithValidation } from "../utils/routeWrapper.js";
 

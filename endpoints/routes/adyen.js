@@ -1,6 +1,6 @@
 // routes/adyen.js - Adyen-specific payment endpoints extracted from payments.js
 import express from "express";
-import { ENDPOINTS } from "../../public/endpoints.js";
+import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
 import { validateCall, makeApiCall, makeApiCallWithErrorHandling, parseResponse, handleSetCookies, is3dsRequired } from "../utils/common.js";
 import { handleThreeDS, insertOrder, redirectToViewOrder } from "./common.js";

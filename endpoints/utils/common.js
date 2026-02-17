@@ -6,7 +6,7 @@ import { parseSetCookieHeader, mergeCookiePairs } from "../utils/cookieUtils.js"
 import { getCookies, setCookies } from "../utils/sessionStore.js";
 import path from "path";
 import { fileURLToPath } from "url";
-import { ENDPOINTS } from "../../public/endpoints.js";
+import { ENDPOINTS } from "../../public/js/endpoints.js";
 // Resolve project root and load .env once (idempotent if already loaded elsewhere)
 try {
     const __filename = fileURLToPath(import.meta.url);
