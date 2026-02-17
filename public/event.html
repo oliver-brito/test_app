@@ -8,6 +8,7 @@
   <script src="js/errorModal.js"></script>
   <script src="js/apiDebugConsole.js"></script>
   <script src="js/apiWrapper.js"></script>
+  <script src="js/authHelper.js"></script>
   <style>
     :root { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
     body { margin: 16px; background: #fafafa; }
@@ -83,6 +84,18 @@
 
     const params = new URLSearchParams(location.search);
     const eventId = params.get("id");
+
+    // Check auth before loading content
+    (async function() {
+      if (!(await window.checkAndRefreshAuth())) {
+        return; // Will redirect to login
+      }
+
+      // Initialize page after auth check
+      loadEvent();
+      renderSeats([]); // initial
+      populatePriceTypes();
+    })();
 
     // ...helpers.js now provides: fallbackImage, showError, parseMoney, pricingMinMax, avText, avImg...
 
@@ -328,10 +341,6 @@
       
       window.location.href = "checkout.html";
     });
-
-    loadEvent();
-    renderSeats([]); // initial
-    populatePriceTypes();
   </script>
 </body>
 </html>

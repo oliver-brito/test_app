@@ -7,6 +7,7 @@
   <script src="js/errorModal.js"></script>
   <script src="js/apiDebugConsole.js"></script>
   <script src="js/apiWrapper.js"></script>
+  <script src="js/authHelper.js"></script>
   <style>
     body { font-family: system-ui, sans-serif; background: #fafafa; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 32px; text-align: center; }
@@ -58,6 +59,11 @@
 
   <script>
     async function loadOrderDetails() {
+      // Check auth and refresh server credentials before loading order
+      if (!(await window.checkAndRefreshAuth())) {
+        return; // Will redirect to login
+      }
+
       const contentDiv = document.getElementById('order-content');
       
       try {
