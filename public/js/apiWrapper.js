@@ -51,12 +51,15 @@
         }
       }
 
-      // Check for authentication errors (status codes or error messages)
+      // Check for authentication errors (status codes, error messages, or errorCode 99)
       const isAuthError = (response.status === 401 || response.status === 403) ||
                           (responseData && typeof responseData === 'object' &&
                            (responseData.error === 'Not authenticated' ||
                             responseData.error === 'Auth failed' ||
-                            responseData.details === 'Not authenticated'));
+                            responseData.details === 'Not authenticated' ||
+                            responseData.errorCode === '99' ||
+                            responseData.errorCode === 99 ||
+                            (responseData.message && responseData.message.toLowerCase().includes('session expired'))));
 
       if (isAuthError && showErrorModal) {
         const currentPath = window.location.pathname + window.location.search;

@@ -34,7 +34,7 @@
   function createDebugConsole() {
     const consoleHTML = `
       <!-- Debug Console Panel -->
-      <div id="api-debug-console" style="display:none; position:fixed; bottom:0; left:0; right:0; height:300px; background:#1e1e1e; color:#d4d4d4; border-top:1px solid #454545; z-index:9997; display:flex; flex-direction:column; font-family:'Consolas','Monaco','Courier New',monospace; font-size:13px;">
+      <div id="api-debug-console" style="display:none; position:fixed; bottom:0; left:0; right:0; height:300px; background:#1e1e1e; color:#d4d4d4; border-top:1px solid #454545; z-index:9997; flex-direction:column; font-family:'Consolas','Monaco','Courier New',monospace; font-size:13px;">
         <!-- Header Bar -->
         <div id="console-header" style="background:#2d2d2d; padding:8px 12px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #454545; cursor:ns-resize; user-select:none;">
           <div style="display:flex; align-items:center; gap:12px;">
