@@ -136,15 +136,60 @@
       fetchConfig.body = JSON.stringify(body);
     }
 
-    const response = await window.fetchWithErrorHandling(endpoint, fetchConfig, showErrorModal);
+    // Prepare request data for logging
+    const requestData = {
+      method,
+      endpoint,
+      body: body || {},
+      timestamp: new Date().toISOString()
+    };
 
-    if (!response.ok) {
-      // Error modal already shown by fetchWithErrorHandling
-      // Return the error response as JSON for further handling
-      return response.json().catch(() => response.text());
+    try {
+      const response = await window.fetchWithErrorHandling(endpoint, fetchConfig, showErrorModal);
+
+      // Clone response to read it without consuming
+      const clonedResponse = response.clone();
+
+      // Parse response data
+      let responseData;
+      try {
+        responseData = await clonedResponse.json();
+      } catch {
+        try {
+          responseData = await clonedResponse.text();
+        } catch {
+          responseData = 'Unable to read response';
+        }
+      }
+
+      // Log to debug console if available
+      if (typeof window.apiDebugConsole !== 'undefined') {
+        // ONLY log backend API calls (to AudienceView)
+        if (responseData && responseData.backendApiCalls && Array.isArray(responseData.backendApiCalls)) {
+          responseData.backendApiCalls.forEach(apiCall => {
+            window.apiDebugConsole.log({
+              method: apiCall.method,
+              endpoint: apiCall.endpoint,
+              status: apiCall.status,
+              request: apiCall.request,
+              response: apiCall.response,
+              duration: apiCall.duration
+            });
+          });
+        }
+      }
+
+      if (!response.ok) {
+        // Error modal already shown by fetchWithErrorHandling
+        // Return the error response for further handling
+        return responseData;
+      }
+
+      return responseData;
+    } catch (error) {
+      // Network errors don't have backend API calls, so we skip logging
+      throw error;
     }
-
-    return response.json();
   };
 
   // Backward compatible: replace global fetch with error-handling version
