@@ -10,6 +10,19 @@ import { wrapRoute } from "../utils/routeWrapper.js";
 const router = express.Router();
 
 /**
+ * GET /auth/defaults
+ * Returns default credentials from .env for pre-filling login form
+ */
+router.get("/auth/defaults", (req, res) => {
+  res.json({
+    apiBase: process.env.API_BASE || '',
+    username: process.env.UNL_USER || '',
+    password: process.env.UNL_PASSWORD || '',
+    customerNumber: process.env.CUSTOMER_NUMBER || '1'
+  });
+});
+
+/**
  * POST /login
  * Authenticates the user with AudienceView API and stores session + cookies.
  * Accepts optional credentials from request body, falls back to .env if not provided.
