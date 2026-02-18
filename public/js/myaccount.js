@@ -9,7 +9,7 @@
 
   try {
     // Fetch customer data from backend
-    const response = await apiCall('/customer/getMyAccountDetails', {}, true);
+    const response = await apiCall('/getMyAccountDetails', {}, true);
 
     if (!response.success) {
       showError('Failed to load account details');
@@ -26,6 +26,7 @@
     renderCustomerInfo(data.Customer);
     renderContactInfo(data.Contacts);
     renderAddressInfo(data.Addresses);
+    renderSavedPaymentsInfo(data.Payments);
 
     // Hide loading indicator
     document.getElementById('loading-indicator')?.remove();
@@ -96,8 +97,8 @@ function renderContactInfo(contacts) {
   const contact = contactsList[0];
   const firstName = contact.first_name?.standard || '';
   const lastName = contact.last_name?.standard || '';
-  const email = contact.email_address?.standard || 'N/A';
-  const phone = contact.telephone_number?.standard || 'N/A';
+  const email = contact.email?.standard || 'N/A';
+  const phone = contact. vphone_number?.standard || 'N/A';
 
   container.innerHTML = `
     <h2 class="section-title">Contact Information</h2>
@@ -142,7 +143,7 @@ function renderAddressInfo(addresses) {
   const address = addressList[0];
   const street = address.street?.standard || '';
   const city = address.city?.standard || '';
-  const province = address.province?.standard || '';
+  const province = address.state?.standard || '';
   const zip = address.zip?.standard || '';
   const country = address.country?.standard || '';
 
@@ -171,6 +172,45 @@ function renderAddressInfo(addresses) {
       </div>
     </div>
   `;
+}
+
+function renderSavedPaymentsInfo(payments) {
+  const container = document.getElementById('saved-payments-info');
+  if (!container) return;
+
+  // Check if payments object has any actual payment methods (not just "state")
+  const hasPayments = payments && Object.keys(payments).some(key => key !== 'state' && payments[key]);
+
+  if (!hasPayments) {
+    container.innerHTML = `
+      <h2 class="section-title">Saved Payment Methods</h2>
+      <p class="no-data">No saved payment methods available</p>
+    `;
+    // button to add new payment method (mock)
+    const addButton = document.createElement('button');
+    addButton.textContent = 'Add New Payment Method';
+    addButton.className = 'add-payment-btn';
+    addButton.onclick = () => addNewPaymentMethod();
+    container.appendChild(addButton);
+    return;
+  }
+
+  // If we reach here, there are actual payment methods - render them
+  container.innerHTML = `
+    <h2 class="section-title">Saved Payment Methods</h2>
+    <p class="no-data">Payment methods found (rendering not yet implemented)</p>
+  `;
+
+  // button to add new payment method (mock)
+  const addButton = document.createElement('button');
+  addButton.textContent = 'Add New Payment Method';
+  addButton.className = 'add-payment-btn';
+  addButton.onclick = () => addNewPaymentMethod();
+  container.appendChild(addButton);
+}
+
+async function addNewPaymentMethod() {
+  alert('Add new payment method functionality not implemented in this demo');
 }
 
 /**

@@ -60,3 +60,19 @@
   text-align: center;
   padding: 48px;
 }
+
+.add-payment-btn {
+  padding: 8px 16px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.add-payment-btn:hover {
+  background: #1d4ed8;
+}
