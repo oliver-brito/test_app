@@ -193,7 +193,8 @@ export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod
       get: ["Order::order_number", "Payments"],
       objectName: "myOrder"
     },
-    "Checkout failed (getPaymentClientToken)"
+    "Checkout failed (getPaymentClientToken)",
+    { checkGatewayConfig: true }
   );
   if (!tokenResult) return null;
   if (tokenResult.apiCallMetadata) backendApiCalls.push(tokenResult.apiCallMetadata);
