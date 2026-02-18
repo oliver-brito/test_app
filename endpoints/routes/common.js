@@ -2,7 +2,7 @@ import { ENDPOINTS } from '../../public/js/endpoints.js';
 import { sendCall, validateCall, handleSetCookies, makeApiCallWithErrorHandling } from '../utils/common.js';
 import { printDebugMessage } from '../utils/debug.js';
 
-const { ORDER: ORDER_PATH, USER: USER_PATH } = ENDPOINTS;
+const { ORDER: ORDER_PATH, CUSTOMER: CUSTOMER_PATH } = ENDPOINTS;
 
 export async function insertOrder() {
     validateCall({}, [], [], "insertOrder");
@@ -97,11 +97,14 @@ export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod
   // Collect all backend API calls for frontend logging
   const backendApiCalls = [];
 
-  // Step 0: Get customer number
+  // Step 0: Get customer id
   const getSessionCustomerIdResult = await makeApiCallWithErrorHandling(
     res,
-    USER_PATH,
-    {session: {get: ["customer_id"]}},
+    CUSTOMER_PATH,
+    {
+      get: ["Customer::customer_id"],
+      objectName: "myCustomer"
+    },
     "Customer not found for user"
   );
 

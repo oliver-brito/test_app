@@ -151,12 +151,69 @@ router.post("/login", wrapRoute(async (req, res) => {
     });
   }
 
+  // Load the customer with the customerId into the myCustomer object for later use in API calls that require a customer
+  const customerUrl = new URL('/app/WebAPI/v2/customer', apiBase).toString();
+  const loadCustomerPayload = {
+    actions: [
+      {
+        method: "load",
+        params: {
+          "Customer::customer_id": customerId
+        }
+      }
+    ],
+    get: ["Customer", "Payments", "Contacts", "Addresses"]
+  };
+
+  const customerStartTime = Date.now();
+  const customerResponse = await fetch(customerUrl, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Cookie: cookies
+    },
+    body: JSON.stringify(loadCustomerPayload)
+  });
+
+  const customerDuration = Date.now() - customerStartTime;
+  const customerData = await parseResponse(customerResponse);
+
+  // Create API call metadata for customer load
+  const customerApiCallMetadata = {
+    method: 'POST',
+    endpoint: customerUrl,
+    status: customerResponse.status,
+    request: {
+      method: 'POST',
+      endpoint: customerUrl,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Cookie: cookies
+      },
+      body: loadCustomerPayload,
+      timestamp: new Date().toISOString()
+    },
+    response: customerData,
+    duration: customerDuration
+  };
+
+  // Check if customer load was successful
+  if (!customerResponse.ok) {
+    if (isDebugMode()) console.log("Warning: Customer load failed:", customerResponse.status);
+    // Don't fail the login, just log the warning
+  } else {
+    if (isDebugMode()) console.log("Customer loaded successfully");
+  }
+
   if (isDebugMode()) console.log("Login successful, customer_id:", customerId, ", API base:", apiBase);
   res.json({
     session: data.session,
     version: data.version,
     customerId: customerId,
-    backendApiCalls: [apiCallMetadata, userApiCallMetadata]
+    customerData: customerData,
+    backendApiCalls: [apiCallMetadata, userApiCallMetadata, customerApiCallMetadata]
   });
 }));
 

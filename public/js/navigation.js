@@ -37,7 +37,7 @@
             </div>
 
             <ul class="nav-menu" id="nav-menu">
-              <li class="nav-item"><a href="myaccount.html" class="nav-link">My Account</a></li>
+              <li class="nav-item"><a href="myAccount.html" class="nav-link">My Account</a></li>
               <li class="nav-item"><a href="about.html" class="nav-link">About</a></li>
             </ul>
 

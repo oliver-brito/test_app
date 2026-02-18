@@ -10,30 +10,8 @@ const { CUSTOMER: CUSTOMER_PATH, USER: USER_PATH } = ENDPOINTS;
 
 router.post('/getMyAccountDetails', express.json(), wrapRouteWithValidation(
     async (req, res) => {
-        // Step 0: get the customer_id from the session
-        const payload = {
-            session: {
-                get: ["customer_id"]
-            }
-        };
-        const result = await makeApiCallWithErrorHandling(
-            res, USER_PATH, payload, "Failed to retrieve customer_id from session");
-        if (!result) return; // Error already handled
-
-        var customer_id = result.data?.customer_id?.standard || null;
-        if (!customer_id) {
-            printDebugMessage("Customer ID not found in session");
-            return res.status(400).json({ success: false, message: "Customer ID not found in session" });
-        }
-        
-        // Step 1: load the customer details using the customer_id
+        // Step 1: get the customer details using the myCustomer object
         const customerPayload = {
-            actions: [
-                {
-                    method: "load",
-                    params: { "Customer::customer_id": customer_id }
-                }
-            ],
             get: ["Customer", "Payments", "Addresses"],
             objectName: "myCustomer"
         };
