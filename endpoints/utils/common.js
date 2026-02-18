@@ -124,6 +124,18 @@ export function is3dsRequired(data) {
     }
 }
 
+export function isGettingGatewayConfiguration(data) {
+    console.log(`Checking if response indicates getting gateway configuration: ${JSON.stringify(data)}`);
+    try {
+        const source = typeof data === 'string' ? data : JSON.stringify(data || '');
+        const codePresent = data?.exception?.number === 4294;
+        if (codePresent) return true;
+        return source.includes('4294');
+    } catch {
+        return false;
+    }
+}
+
 /**
  * Parses response text as JSON, falls back to raw text if parsing fails.
  * Eliminates the repeated pattern: const raw = await response.text(); let data; try { data = JSON.parse(raw); } catch { data = raw; }
@@ -221,6 +233,7 @@ export function handleApiError(res, response, data, errorMessage, endpoint = 'un
  * @param {object} options - Optional settings
  * @param {boolean} options.manual - Manual redirect flag
  * @param {boolean} options.check3ds - Check for 3DS requirement
+ * @param {boolean} options.checkGatewayConfig - Check for gateway configuration requirement
  * @returns {Promise<{response: Response, data: any, requires3ds?: boolean} | null>}
  */
 export async function makeApiCallWithErrorHandling(
@@ -230,11 +243,18 @@ export async function makeApiCallWithErrorHandling(
     errorMessage,
     options = {}
 ) {
-    const { manual = false, check3ds = false } = options;
+    const { manual = false, check3ds = false, checkGatewayConfig = false } = options;
 
     const { response, data, apiCallMetadata } = await makeApiCall(path, payload, manual);
 
     if (!response.ok) {
+        console.log(`checkGatewayConfig: ${checkGatewayConfig}, check3ds: ${check3ds}`);
+        // Check for gateway configuration requirement if enabled
+        if (checkGatewayConfig && isGettingGatewayConfiguration(data)) {
+            printDebugMessage("Getting gateway configuration");
+            return { response, data, apiCallMetadata, isGettingGatewayConfiguration: true };
+
+        }
         // Check for 3DS requirement if enabled
         if (check3ds && is3dsRequired(data)) {
             printDebugMessage("3DS authentication required");
