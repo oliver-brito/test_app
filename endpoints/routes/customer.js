@@ -12,7 +12,7 @@ router.post('/getMyAccountDetails', express.json(), wrapRouteWithValidation(
     async (req, res) => {
         // Step 1: get the customer details using the myCustomer object
         const customerPayload = {
-            get: ["Customer", "Payments", "Addresses"],
+            get: ["Customer", "Payments", "Contacts", "Addresses"],
             objectName: "myCustomer"
         };
         const customerResult = await makeApiCallWithErrorHandling(
