@@ -108,9 +108,14 @@ export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod
     "Customer not found for user"
   );
 
-  var customer_id = getSessionCustomerIdResult?.data?.data?.customer_id?.standard;
-
   if (!getSessionCustomerIdResult) return null;
+
+  var customer_id = getSessionCustomerIdResult?.data?.data?.["Customer::customer_id"]?.standard;
+
+  if (!customer_id) {
+    res.status(400).json({ error: "Could not retrieve customer ID from session" });
+    return null;
+  }
   // Step 1: Add customer
   const customerResult = await makeApiCallWithErrorHandling(
     res,
