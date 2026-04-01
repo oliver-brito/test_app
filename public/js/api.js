@@ -71,7 +71,8 @@ window.handleAdyenSubmit = async function(state, dropin) {
   try {
     // Use the new API wrapper for automatic error modal display
     const result = await window.apiCall('/processAdyenPayment', {
-      body: { externalData: JSON.stringify(state.data), paymentID: window.paymentID }
+      body: { externalData: JSON.stringify(state.data), paymentID: window.paymentID },
+      showErrorModal: false
     });
   // Payment processing result received
     if (result.success && result.redirectUrl) {
@@ -88,13 +89,17 @@ window.handleAdyenSubmit = async function(state, dropin) {
         console.warn('dropin.handleAction not available');
       }
     } else {
-      throw new Error(result.error || 'Payment failed');
+      if (typeof window.showApiError === 'function') {
+        window.showApiError({
+          endpoint: '/processAdyenPayment',
+          error: result.error || 'Payment failed',
+          status: result.status || 400,
+          request: { body: { paymentID: window.paymentID } },
+          response: result
+        });
+      }
     }
   } catch (error) {
     console.error('Payment submission error:', error);
-    // Error modal already shown by apiCall wrapper if it was an API error
-    if (!error.message.includes('Payment failed')) {
-      alert('Payment submission failed: ' + error.message);
-    }
   }
 };
