@@ -40,4 +40,18 @@ router.post('/getMyAccountDetails', express.json(), wrapRouteWithValidation(
     { paths: ["USER_PATH", "CUSTOMER_PATH"], name: "getMyAccountDetails" }
 ));
 
+router.post('/addNewPaymentMethod', express.json(), wrapRouteWithValidation(
+    async (req, res) => {
+        //
+    },
+    { paths: ["CUSTOMER_PATH"], name: "addNewPaymentMethod" }
+));
+
+router.post('/getSaveablePaymentMethods', express.json(), wrapRouteWithValidation(
+    async (req, res) => {
+        
+    },
+    { paths: ["CUSTOMER_PATH"], name: "getSaveablePaymentMethods" }
+));
+
 export default router;

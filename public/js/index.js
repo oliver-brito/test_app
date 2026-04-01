@@ -191,7 +191,6 @@
     try {
       $status.textContent = "Loading…";
       const events = await fetchEvents(movePage);
-      console.log(events);
 
       $list.innerHTML = "";
 

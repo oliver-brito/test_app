@@ -342,7 +342,8 @@
       status: logData.status,
       request: logData.request,
       response: logData.response,
-      duration: logData.duration || null
+      duration: logData.duration || null,
+      title: logData.title || null
     };
 
     apiCallLogs.unshift(logEntry); // Add to beginning
@@ -394,11 +395,16 @@
       const requestId = 'req-' + index;
       const responseId = 'res-' + index;
 
-      // Extract action method from request body if available
-      const actionMethod = log.request?.body?.actions?.[0]?.method;
-      const logTitle = actionMethod
-        ? `${actionMethod} <span style="color:#858585;">(${log.method} ${log.endpoint})</span>`
-        : log.endpoint;
+      // Use title from backend if available, otherwise extract from request
+      let logTitle;
+      if (log.title) {
+        logTitle = `${log.title} <span style="color:#858585;">(${log.endpoint})</span>`;
+      } else {
+        const actionMethod = log.request?.body?.actions?.[0]?.method;
+        logTitle = actionMethod
+          ? `${actionMethod} <span style="color:#858585;">(${log.endpoint})</span>`
+          : log.endpoint;
+      }
 
       return `
         <div class="log-entry">

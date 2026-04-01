@@ -201,7 +201,8 @@
               status: apiCall.status,
               request: apiCall.request,
               response: apiCall.response,
-              duration: apiCall.duration
+              duration: apiCall.duration,
+              title: apiCall.title
             });
           });
         }

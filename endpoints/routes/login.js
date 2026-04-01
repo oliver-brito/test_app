@@ -162,6 +162,7 @@ router.post("/login", wrapRoute(async (req, res) => {
         }
       }
     ],
+    objectName: "myCustomer",
     get: ["Customer", "Payments", "Contacts", "Addresses"]
   };
 
@@ -181,9 +182,6 @@ router.post("/login", wrapRoute(async (req, res) => {
 
   // Create API call metadata for customer load
   const customerApiCallMetadata = {
-    method: 'POST',
-    endpoint: customerUrl,
-    status: customerResponse.status,
     request: {
       method: 'POST',
       endpoint: customerUrl,

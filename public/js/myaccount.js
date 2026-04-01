@@ -210,6 +210,7 @@ function renderSavedPaymentsInfo(payments) {
 }
 
 async function addNewPaymentMethod() {
+  const response = await apiCall('/addNewPaymentMethod', {}, true);
   alert('Add new payment method functionality not implemented in this demo');
 }
 

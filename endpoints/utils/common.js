@@ -159,6 +159,37 @@ export async function parseResponse(response) {
  * @param {boolean} manual - Manual redirect flag (default: false)
  * @returns {Promise<{response: Response, data: any}>}
  */
+/**
+ * Generates a descriptive title for an API call based on the payload
+ * @param {object} payload - The request payload
+ * @returns {string} - Descriptive title for the API call
+ */
+function generateApiCallTitle(payload) {
+    // Check if there are actions with methods
+    if (payload.actions && Array.isArray(payload.actions) && payload.actions.length > 0) {
+        const methods = payload.actions
+            .map(action => action.method)
+            .filter(method => method)
+            .join(', ');
+        if (methods) return methods;
+    }
+
+    // If no actions but there's a get array, show "get item1, item2, ..."
+    if (payload.get && Array.isArray(payload.get) && payload.get.length > 0) {
+        const items = payload.get.join(', ');
+        return `get ${items}`;
+    }
+
+    // If there's a set object, show "set field1, field2, ..."
+    if (payload.set && typeof payload.set === 'object' && Object.keys(payload.set).length > 0) {
+        const fields = Object.keys(payload.set).join(', ');
+        return `set ${fields}`;
+    }
+
+    // Default fallback
+    return 'API call';
+}
+
 export async function makeApiCall(path, payload, manual = false) {
     const startTime = Date.now();
     const apiBase = getActiveApiBase();
@@ -173,11 +204,15 @@ export async function makeApiCall(path, payload, manual = false) {
     // Log the response
     logApiCall(path, { body: payload }, response, data);
 
+    // Generate descriptive title for the API call
+    const title = generateApiCallTitle(payload);
+
     // Include backend API call metadata for frontend logging
     const apiCallMetadata = {
         method: 'POST',
         endpoint: fullUrl,
         path: path,
+        title: title,
         status: response.status,
         duration: duration,
         request: {
