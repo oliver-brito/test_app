@@ -100,6 +100,7 @@ window.handleAdyenSubmit = async function(state, dropin) {
         setTimeout(() => { window.location.href = `event.html?id=${encodeURIComponent(eventId)}&cancelled=true`; }, 1000);
       }
     } else {
+      dropin.setStatus('ready');
       if (typeof window.showApiError === 'function') {
         window.showApiError({
           endpoint: '/processAdyenPayment',
@@ -112,5 +113,6 @@ window.handleAdyenSubmit = async function(state, dropin) {
     }
   } catch (error) {
     console.error('Payment submission error:', error);
+    dropin.setStatus('error', { message: error.message || 'Payment submission failed.' });
   }
 };
