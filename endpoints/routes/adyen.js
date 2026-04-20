@@ -138,6 +138,10 @@ router.post("/processAdyenPayment", wrapRouteWithValidation(
           paymentID
         });
       }
+      if (txData?.exception?.message?.toLowerCase().includes('insertunpaid')) {
+        printDebugMessage('Payment requires redirect completion (insertUnpaid) - returning pa_request_information');
+        return handleThreeDS(req, res, { paymentID });
+      }
       printDebugMessage(`Transaction completion failed: ${txResp.status}`);
       return res.status(txResp.status).json({
         success: false,
