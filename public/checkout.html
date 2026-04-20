@@ -98,7 +98,8 @@
         }
         // kick off orchestrator after helper scripts are loaded
         const checkoutMode = new URLSearchParams(location.search).get('mode');
-        const checkoutFn = (checkoutMode === 'reusePayment' && typeof window.doCheckoutReusePayment === 'function')
+        const returningFromRedirect = !!window.location.search && !checkoutMode;
+        const checkoutFn = ((checkoutMode === 'reusePayment' || returningFromRedirect) && typeof window.doCheckoutReusePayment === 'function')
           ? window.doCheckoutReusePayment
           : window.doCheckout;
         if (typeof checkoutFn === 'function' && !(result && result.urlHandled)) checkoutFn();
