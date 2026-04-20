@@ -93,7 +93,7 @@ export async function handleThreeDS(req, res, { paymentID } = {}) {
  * @param {string} paymentMethod - Payment method
  * @returns {Promise<{paymentID: string, payment_details: object} | null>}
  */
-export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod) {
+export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod, paResponseURL) {
   // Collect all backend API calls for frontend logging
   const backendApiCalls = [];
 
@@ -196,7 +196,7 @@ export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod
     {
       actions: [{
         method: "getPaymentClientToken",
-        params: { payment_id: paymentID, pa_response_URL: "https://localhost:3444/checkout.html" }
+        params: { payment_id: paymentID, pa_response_URL: paResponseURL }
       }],
       get: ["Order::order_number", "Payments"],
       objectName: "myOrder"

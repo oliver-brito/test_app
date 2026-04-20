@@ -52,7 +52,8 @@ router.post("/checkout", express.json(), wrapRouteWithValidation(
   async (req, res) => {
     const { deliveryMethod, paymentMethod } = req.body;
 
-    const result = await executeCheckoutSequence(res, deliveryMethod, paymentMethod);
+    const paResponseURL = `${req.protocol}://${req.get('host')}/checkout.html`;
+    const result = await executeCheckoutSequence(res, deliveryMethod, paymentMethod, paResponseURL);
     if (!result) return; // Error already handled
 
     printDebugMessage("Checkout completed successfully");

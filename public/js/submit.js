@@ -98,7 +98,7 @@ function handleSubmit(event) {
             var payload = {
               paymentId: pid,
               pa_response_information: e.data,
-              pa_response_URL: window.location.href || "https://localhost:3444/checkout.html"
+              pa_response_URL: window.location.href || (window.location.origin + '/checkout.html')
             };
             try {
               // Use the new API wrapper for automatic error modal display
