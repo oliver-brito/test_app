@@ -2,7 +2,7 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { parseResponse, handleSetCookies, is3dsRequired } from "../utils/common.js";
+import { is3dsRequired } from "../utils/common.js";
 import { insertOrder, redirectToViewOrder, handleThreeDS, executeCheckoutSequence } from "./common.js";
 import { wrapRouteWithValidation } from "../utils/routeWrapper.js";
 
@@ -14,9 +14,7 @@ router.post("/transaction", express.json(), wrapRouteWithValidation(
   async (req, res) => {
     const { paymentId } = req.body;
 
-    const response = await insertOrder();
-    await handleSetCookies(response);
-    const data = await parseResponse(response);
+    const { response, data } = await insertOrder();
 
     if (!response.ok) {
       /** When the error is 4294, that means that the payment requires a 3DS confirmation

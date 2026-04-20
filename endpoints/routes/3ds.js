@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import { ENDPOINTS } from "../../public/js/endpoints.js"; // public endpoints constants
-import { makeApiCallWithErrorHandling, parseResponse, handleSetCookies } from "../utils/common.js"; // shared validation & fetch & cookie wrapper
+import { makeApiCallWithErrorHandling } from "../utils/common.js"; // shared validation & fetch & cookie wrapper
 import { insertOrder, redirectToViewOrder } from "./common.js"; // order helpers
 import { wrapRouteWithValidation } from "../utils/routeWrapper.js";
 
@@ -57,9 +57,7 @@ router.post("/processThreeDSResponse", wrapRouteWithValidation(
          * This will insert the order and use the information in pa_response_information
          * to process the payment.
          */
-        const actionsResp = await insertOrder();
-        await handleSetCookies(actionsResp);
-        const actionsJson = await parseResponse(actionsResp);
+        const { response: actionsResp, data: actionsJson } = await insertOrder();
 
         if (!actionsResp.ok) {
             return res.status(actionsResp.status).json({
@@ -69,10 +67,6 @@ router.post("/processThreeDSResponse", wrapRouteWithValidation(
             });
         }
 
-        /** We have successfully processed 3DS and finalized the order
-         * The following extracts order details for redirection. This is not part of the API response,
-         * is just a visual indicator in the test app to show order completion.
-        */
         const orderNumber = actionsJson?.data?.["Order::order_number"]?.standard ||
                            result.data?.data?.["Order::order_number"]?.standard || null;
         const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
