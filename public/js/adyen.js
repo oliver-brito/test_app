@@ -102,12 +102,16 @@ async function handleUrlParameters(paymentID) {
 
     if (resp.ok && result && result.success && result.redirectUrl) {
       setTimeout(() => { window.location.href = result.redirectUrl; }, 1500);
+      return { urlHandled: true };
+    } else if (result && result.cancelled) {
+      return { urlHandled: false };
     } else {
       const errMsg = (result && result.error) ? result.error : (typeof result === 'string' ? result : 'Transaction failed');
       throw new Error(errMsg);
     }
   } catch (e) {
     console.error("❌ Error sending PaRes (JSON):", e);
+    return { urlHandled: false };
   }
 
   return { urlHandled: true };

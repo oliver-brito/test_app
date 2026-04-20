@@ -60,6 +60,9 @@ router.post("/processThreeDSResponse", wrapRouteWithValidation(
         const { response: actionsResp, data: actionsJson } = await insertOrder();
 
         if (!actionsResp.ok) {
+            if (actionsJson?.exception?.number === 2018) {
+                return res.json({ success: false, cancelled: true, error: actionsJson?.exception?.message || 'Payment was cancelled' });
+            }
             return res.status(actionsResp.status).json({
                 status: actionsResp.status,
                 body: actionsJson,
