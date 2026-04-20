@@ -97,7 +97,11 @@
           result = await result;
         }
         // kick off orchestrator after helper scripts are loaded
-        if (typeof window.doCheckout === 'function' && !(result && result.urlHandled)) window.doCheckout();
+        const checkoutMode = new URLSearchParams(location.search).get('mode');
+        const checkoutFn = (checkoutMode === 'reusePayment' && typeof window.doCheckoutReusePayment === 'function')
+          ? window.doCheckoutReusePayment
+          : window.doCheckout;
+        if (typeof checkoutFn === 'function' && !(result && result.urlHandled)) checkoutFn();
       } catch (e) {
         console.error('Error handling URL parameters:', e);
         if (typeof window.doCheckout === 'function') window.doCheckout();

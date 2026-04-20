@@ -40,3 +40,30 @@ async function doCheckout() {
 // Expose for inline script to call after scripts load
 window.doCheckout = doCheckout;
 
+async function doCheckoutReusePayment() {
+	const ctx = window.getCheckoutContext();
+	const { eventId, deliveryMethod, paymentMethod, resultDiv } = ctx;
+	const existingPaymentID = localStorage.getItem('paymentID');
+
+	if (!existingPaymentID) {
+		return doCheckout();
+	}
+
+	resultDiv.innerHTML = '<div class="muted">Resuming payment session\u2026</div>';
+	try {
+		window.paymentID = existingPaymentID;
+		await window.determineAdyenFlag(existingPaymentID);
+		if (!window.adyen) {
+			return doCheckout();
+		}
+		window.renderCheckoutInfo(resultDiv, window.adyen, eventId, deliveryMethod, paymentMethod, '', '', existingPaymentID);
+		window.renderAdyenDropIn(resultDiv);
+		const convRef = { value: '', eventId, deliveryMethod, paymentMethod, pa_request_url: '' };
+		const pidRef = { value: existingPaymentID };
+		window.wireChangeInfoButton(convRef, pidRef, resultDiv);
+	} catch (err) {
+		resultDiv.innerHTML = `<div class="error">Failed to resume payment session: ${err.message}</div>`;
+	}
+}
+window.doCheckoutReusePayment = doCheckoutReusePayment;
+

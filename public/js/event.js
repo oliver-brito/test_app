@@ -18,6 +18,8 @@
   const $pricetype_value = document.getElementById("pricetype_value");
   const $best = document.getElementById("best");
   const $checkout = document.getElementById("checkout");
+  const $reusePaymentLabel = document.getElementById("reuse-payment-label");
+  const $reusePayment = document.getElementById("reuse-payment");
 
   const params = new URLSearchParams(location.search);
   const eventId = params.get("id");
@@ -178,6 +180,7 @@
       console.log(admissions, seatRows, pseudoSeats);
       renderSeats(pseudoSeats);
       $checkout.style.display = "";
+      if ($reusePaymentLabel) $reusePaymentLabel.style.display = "flex";
 
       // Render Delivery Methods dropdown
       let $delivery = document.getElementById("delivery");
@@ -258,25 +261,24 @@
     e.preventDefault();
     const $delivery = document.getElementById("delivery");
     const $payment = document.getElementById("payment");
-    const deliveryMethod = $delivery ? $delivery.value : null;
-    const paymentMethod = $payment ? $payment.value : null;
+    const deliveryMethod = ($delivery && $delivery.value) || localStorage.getItem('deliveryMethod');
+    const paymentMethod = ($payment && $payment.value) || localStorage.getItem('paymentMethod');
     if (!deliveryMethod || !paymentMethod) {
       showError("Please select a delivery and payment method.");
       return;
     }
 
-    // Get event information for the order
     const eventName = document.getElementById("title").textContent || "Unknown Event";
     const eventDate = document.getElementById("start").textContent || "TBD";
 
-    // Save to localStorage for checkout.html to read
     localStorage.setItem('deliveryMethod', deliveryMethod);
     localStorage.setItem('paymentMethod', paymentMethod);
     localStorage.setItem('eventId', eventId);
     localStorage.setItem('eventName', eventName);
     localStorage.setItem('eventDate', eventDate);
 
-    window.location.href = "checkout.html";
+    const reusePayment = $reusePayment && $reusePayment.checked;
+    window.location.href = reusePayment ? "checkout.html?mode=reusePayment" : "checkout.html";
   }
 
   // Event listeners
@@ -297,5 +299,11 @@
     loadEvent();
     renderSeats([]); // initial
     populatePriceTypes();
+
+    // Restore checkout button if returning from a cancelled payment
+    if (new URLSearchParams(location.search).get('cancelled') === 'true') {
+      $checkout.style.display = "";
+      if ($reusePaymentLabel) $reusePaymentLabel.style.display = "flex";
+    }
   })();
 })();

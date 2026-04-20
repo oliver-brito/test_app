@@ -2,7 +2,7 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { validateCall, makeApiCall, makeApiCallWithErrorHandling, parseResponse, handleSetCookies, is3dsRequired } from "../utils/common.js";
+import { validateCall, makeApiCall, makeApiCallWithErrorHandling, is3dsRequired } from "../utils/common.js";
 import { handleThreeDS, insertOrder, redirectToViewOrder } from "./common.js";
 import { wrapRoute, wrapRouteWithValidation } from "../utils/routeWrapper.js";
 
@@ -112,7 +112,7 @@ router.post("/getPaymentResponse", wrapRouteWithValidation(
 // POST /processAdyenPayment -> Process Adyen payment data via AudienceView
 router.post("/processAdyenPayment", wrapRouteWithValidation(
   async (req, res) => {
-    const { externalData, paymentID } = req.body;
+    const { externalData, paymentID, resetPaymentAttempt } = req.body;
 
     // Step 1: Set external payment data
     const setPayload = { set: { [`Payments::${paymentID}::external_payment_data`]: externalData }, objectName: "myOrder", get: ["Payments"] };
@@ -121,40 +121,28 @@ router.post("/processAdyenPayment", wrapRouteWithValidation(
     );
     if (!setResult) return; // Error already handled
 
-    // Verify data was set correctly
-    const payments = setResult.data?.data?.Payments || {};
-    const paymentRecord = payments[paymentID];
-    const externalPaymentDataSet = paymentRecord?.external_payment_data?.standard;
-    if (externalPaymentDataSet !== externalData) {
-      printDebugMessage("Adyen payment data verification failed");
-      return res.json({
-        success: false,
-        paymentID,
-        externalDataSet: false,
-        expectedData: externalData,
-        actualData: externalPaymentDataSet,
-        payments,
-        message: "Adyen payment data verification failed",
-        rawResponse: setResult.data
-      });
-    }
-
     // Step 2: Complete transaction
-    const txResp = await insertOrder();
-    await handleSetCookies(txResp);
-    const txData = await parseResponse(txResp);
+    const { response: txResp, data: txData } = await insertOrder({ resetPaymentAttempt: !!resetPaymentAttempt });
 
     if (!txResp.ok) {
       if (is3dsRequired(txData)) {
         printDebugMessage('Transaction completion indicates 3DS required (4294)');
         return handleThreeDS(req, res, { paymentID, transactionData: txData });
       }
+      if (txData?.exception?.number === 2018) {
+        printDebugMessage('Payment cancelled by user (2018)');
+        return res.status(txResp.status).json({
+          success: false,
+          cancelled: true,
+          error: txData?.exception?.message || 'Payment was cancelled',
+          paymentID
+        });
+      }
       printDebugMessage(`Transaction completion failed: ${txResp.status}`);
       return res.status(txResp.status).json({
         success: false,
         error: "Failed to complete transaction",
         details: txData,
-        externalDataSet: true,
         paymentID
       });
     }

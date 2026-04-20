@@ -43,6 +43,11 @@
       <input id="pricetype_value" type="hidden" />
       <button id="best" class="btn">Get Seats & Add</button>
       <a id="checkout" class="btn btn-secondary" href="checkout.html" style="display:none;">Checkout</a>
+      <label id="reuse-payment-label" style="display:none; align-items:center; gap:6px; font-size:14px; cursor:pointer;">
+        <input type="checkbox" id="reuse-payment">
+        Reuse payment session
+        <span title="Simulates Online UI behaviour: skips getPaymentClientToken on retry, reusing the existing payment record instead of reinitialising it. Required to reproduce cancel-and-retry scenarios (QA-13&#x2013;16)." style="cursor:help; font-size:11px; border:1px solid currentColor; border-radius:50%; padding:0 4px; opacity:0.6;">?</span>
+      </label>
     </div>
 
     <div class="card">

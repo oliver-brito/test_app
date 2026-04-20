@@ -70,8 +70,13 @@ window.handleAdyenSubmit = async function(state, dropin) {
   // Adyen Drop-in onSubmit invoked
   try {
     // Use the new API wrapper for automatic error modal display
+    const resetEnabled = localStorage.getItem('resetPaymentAttemptEnabled') === 'true';
     const result = await window.apiCall('/processAdyenPayment', {
-      body: { externalData: JSON.stringify(state.data), paymentID: window.paymentID },
+      body: {
+        externalData: JSON.stringify(state.data),
+        paymentID: window.paymentID,
+        ...(resetEnabled ? { resetPaymentAttempt: true } : {})
+      },
       showErrorModal: false
     });
   // Payment processing result received
@@ -87,6 +92,12 @@ window.handleAdyenSubmit = async function(state, dropin) {
         dropin.handleAction(result.paRequestInfo); // Pass action data to Drop-in for further handling
       } else {
         console.warn('dropin.handleAction not available');
+      }
+    } else if (result.cancelled) {
+      dropin.setStatus('error', { message: result.error || 'Payment was cancelled.' });
+      const eventId = localStorage.getItem('eventId');
+      if (eventId) {
+        setTimeout(() => { window.location.href = `event.html?id=${encodeURIComponent(eventId)}&cancelled=true`; }, 1000);
       }
     } else {
       if (typeof window.showApiError === 'function') {

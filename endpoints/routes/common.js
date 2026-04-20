@@ -1,16 +1,18 @@
 import { ENDPOINTS } from '../../public/js/endpoints.js';
-import { sendCall, validateCall, handleSetCookies, makeApiCallWithErrorHandling } from '../utils/common.js';
+import { sendCall, validateCall, handleSetCookies, makeApiCall, makeApiCallWithErrorHandling } from '../utils/common.js';
 import { printDebugMessage } from '../utils/debug.js';
 
 const { ORDER: ORDER_PATH, CUSTOMER: CUSTOMER_PATH } = ENDPOINTS;
 
-export async function insertOrder() {
+export async function insertOrder({ resetPaymentAttempt = false } = {}) {
     validateCall({}, [], [], "insertOrder");
+    const insertParams = { notification: "correspondence" };
+    if (resetPaymentAttempt) insertParams.resetPaymentAttempt = "1";
     const actionsBody = {
         actions: [
             {
                 method: "insert",
-                params: { notification: "correspondence" },
+                params: insertParams,
                 acceptWarnings: [5008, 4224, 5388]
             }
         ],
@@ -18,9 +20,7 @@ export async function insertOrder() {
         get: ["Order", "Admissions", "Payments", "Order::order_number"]
     };
 
-    
-    const resp = await sendCall(ORDER_PATH, actionsBody, true);
-    return resp;
+    return await makeApiCall(ORDER_PATH, actionsBody, true);
 }
 
 export async function redirectToViewOrder(orderData, res){
