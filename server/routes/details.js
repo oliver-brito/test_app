@@ -1,49 +1,46 @@
-// server/routes/details.js
+// server/routes/details.js — read-only views over the active order.
 import express from "express";
-import { printDebugMessage } from "../utils/debug.js";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
+import { printDebugMessage } from "../utils/debug.js";
 import { callAvManaged } from "../services/avClient.js";
+import { unwrap } from "../services/avResponse.js";
+import { MY_ORDER } from "../av/objectNames.js";
+import { ORDER, ADMISSIONS, PAYMENTS } from "../av/fields.js";
 
 const { ORDER: ORDER_PATH } = ENDPOINTS;
 const router = express.Router();
 
-// GET /order -> Retrieve order details from AudienceView
 router.get("/order", async (req, res) => {
-  const payload = {
-    get: ["Order", "Admissions"],
-    objectName: "myOrder",
-  };
-
   const result = await callAvManaged(
-    res, ORDER_PATH, payload, "Failed to fetch order details"
+    res,
+    ORDER_PATH,
+    { get: [ORDER, ADMISSIONS], objectName: MY_ORDER },
+    "Failed to fetch order details"
   );
   if (!result) return;
 
   printDebugMessage("Order details fetched successfully");
   res.json({
     success: true,
-    order: result.data?.data?.Order || {},
+    order: unwrap(result.data, ORDER) || {},
     rawResponse: result.data,
-    admissions: result.data?.data?.Admissions || {},
+    admissions: unwrap(result.data, ADMISSIONS) || {},
   });
 });
 
-// GET /details -> Retrieve payment details from AudienceView
 router.get("/details", async (req, res) => {
-  const payload = {
-    get: ["Payments"],
-    objectName: "myOrder",
-  };
-
   const result = await callAvManaged(
-    res, ORDER_PATH, payload, "Failed to fetch payment details"
+    res,
+    ORDER_PATH,
+    { get: [PAYMENTS], objectName: MY_ORDER },
+    "Failed to fetch payment details"
   );
   if (!result) return;
 
   printDebugMessage("Payment details fetched successfully");
   res.json({
     success: true,
-    payments: result.data?.data?.Payments || {},
+    payments: unwrap(result.data, PAYMENTS) || {},
     rawResponse: result.data,
   });
 });

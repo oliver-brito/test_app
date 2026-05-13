@@ -5,6 +5,9 @@ import { filterCookieHeader } from "../utils/cookieUtils.js";
 import { isDebugMode } from "../utils/debug.js";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { parseResponse } from "../services/avResponse.js";
+import { MY_CUSTOMER } from "../av/objectNames.js";
+import { LOAD } from "../av/methods.js";
+import { CUSTOMER_ID, CUSTOMER, PAYMENTS, CONTACTS, ADDRESSES } from "../av/fields.js";
 
 const router = express.Router();
 
@@ -92,7 +95,7 @@ router.post("/login", express.json(), async (req, res) => {
   setSession(session, cookies, apiBase);
 
   // Validate that user has a customer_id assigned
-  const userUrl = new URL('/app/WebAPI/v2/user', apiBase).toString();
+  const userUrl = new URL(ENDPOINTS.USER, apiBase).toString();
   const userBody = {
     session: {
       get: ["customer_id"]
@@ -150,19 +153,12 @@ router.post("/login", express.json(), async (req, res) => {
     });
   }
 
-  // Load the customer with the customerId into the myCustomer object for later use in API calls that require a customer
-  const customerUrl = new URL('/app/WebAPI/v2/customer', apiBase).toString();
+  // Load the customer into myCustomer for later av-avon calls.
+  const customerUrl = new URL(ENDPOINTS.CUSTOMER, apiBase).toString();
   const loadCustomerPayload = {
-    actions: [
-      {
-        method: "load",
-        params: {
-          "Customer::customer_id": customerId
-        }
-      }
-    ],
-    objectName: "myCustomer",
-    get: ["Customer", "Payments", "Contacts", "Addresses"]
+    actions: [{ method: LOAD, params: { [CUSTOMER_ID]: customerId } }],
+    objectName: MY_CUSTOMER,
+    get: [CUSTOMER, PAYMENTS, CONTACTS, ADDRESSES],
   };
 
   const customerStartTime = Date.now();

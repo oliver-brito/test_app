@@ -1,16 +1,21 @@
+// Issues the 3DS challenge to the browser when av-avon signals 4294
+// "3DS required" on an order insert.
+
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { callAv } from "./avClient.js";
 import { printDebugMessage } from "../utils/debug.js";
 import { EXCEPTION_CODES } from "../constants.js";
+import { MY_ORDER } from "../av/objectNames.js";
+import { paymentField, PAYMENT_FIELDS } from "../av/fields.js";
 
 const { ORDER: ORDER_PATH } = ENDPOINTS;
 
+/** av-avon occasionally double-encodes the JSON; try once, fall back to twice. */
 function parsePaRequestInfo(raw) {
   if (!raw) return null;
   try {
     return JSON.parse(raw);
   } catch {
-    // av-avon occasionally double-encodes the JSON.
     try {
       return JSON.parse(JSON.parse(raw));
     } catch {
@@ -20,26 +25,24 @@ function parsePaRequestInfo(raw) {
 }
 
 /**
- * Issue a 402 response containing the 3DS challenge inputs (pa_request_information
- * + pa_request_URL) the browser-side flow needs to launch the Cardinal iframe.
+ * Respond with a 402 body containing the 3DS challenge inputs
+ * (pa_request_information + pa_request_URL) the browser-side flow needs to
+ * mount the Cardinal iframe.
  */
 export async function handleThreeDS(req, res, { paymentId } = {}) {
+  const paRequestInfoField = paymentField(paymentId, PAYMENT_FIELDS.PA_REQUEST_INFORMATION);
+  const paRequestUrlField = paymentField(paymentId, PAYMENT_FIELDS.PA_REQUEST_URL);
+
   try {
-    const payload = {
-      get: [
-        `Payments::${paymentId}::pa_request_information`,
-        `Payments::${paymentId}::pa_request_URL`,
-      ],
-      objectName: "myOrder",
-    };
+    const { data } = await callAv(ORDER_PATH, {
+      get: [paRequestInfoField, paRequestUrlField],
+      objectName: MY_ORDER,
+    });
 
-    const { data } = await callAv(ORDER_PATH, payload);
-
-    const paObj = data?.data?.[`Payments::${paymentId}::pa_request_information`];
+    const paObj = data?.data?.[paRequestInfoField];
     const paJsonStr = paObj?.standard || paObj?.input || paObj?.display || null;
-
     const paInfo = paJsonStr ? parsePaRequestInfo(paJsonStr) : null;
-    const paURL = paJsonStr ? data?.data?.[`Payments::${paymentId}::pa_request_URL`] : null;
+    const paURL = paJsonStr ? data?.data?.[paRequestUrlField] : null;
 
     return res.status(402).json({
       success: false,

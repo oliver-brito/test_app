@@ -1,13 +1,18 @@
+// Order-level helpers shared by every payment flow.
+
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { callAv } from "./avClient.js";
 import { ACCEPTED_WARNINGS } from "../constants.js";
+import { MY_ORDER } from "../av/objectNames.js";
+import { INSERT } from "../av/methods.js";
+import { ORDER, ADMISSIONS, PAYMENTS, ORDER_NUMBER } from "../av/fields.js";
 
 const { ORDER: ORDER_PATH } = ENDPOINTS;
 
 /**
- * Submit the active order (myOrder.insert). Used at the end of the various
- * payment flows (Adyen, 3DS, generic /transaction). The accepted warning
- * codes correspond to soft errors av-avon emits that we treat as success.
+ * Submit the active order (myOrder.insert). Used at the end of the Adyen,
+ * 3DS, and generic /transaction flows. The accepted warning codes
+ * correspond to soft warnings av-avon emits that we treat as success.
  */
 export async function insertOrder({ resetPaymentAttempt = false } = {}) {
   const insertParams = { notification: "correspondence" };
@@ -17,10 +22,10 @@ export async function insertOrder({ resetPaymentAttempt = false } = {}) {
     ORDER_PATH,
     {
       actions: [
-        { method: "insert", params: insertParams, acceptWarnings: ACCEPTED_WARNINGS.INSERT_ORDER },
+        { method: INSERT, params: insertParams, acceptWarnings: ACCEPTED_WARNINGS.INSERT_ORDER },
       ],
-      objectName: "myOrder",
-      get: ["Order", "Admissions", "Payments", "Order::order_number"],
+      objectName: MY_ORDER,
+      get: [ORDER, ADMISSIONS, PAYMENTS, ORDER_NUMBER],
     },
     { manual: true }
   );

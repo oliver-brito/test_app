@@ -4,11 +4,15 @@ import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
 import { callAv, callAvManaged, hasActiveSession } from "../services/avClient.js";
 import { classifyException } from "../services/apiErrors.js";
+import { unwrap } from "../services/avResponse.js";
 import { ACCEPTED_WARNINGS } from "../constants.js";
 import { insertOrder, redirectToViewOrder } from "../services/order.js";
 import { handleThreeDS } from "../services/threeDSChallenge.js";
 import { validate } from "../middleware/validate.js";
 import { ProcessAdyenPaymentBody, PaymentIdBody } from "../schemas/payments.js";
+import { MY_ORDER, MY_PAYMENT_METHOD } from "../av/objectNames.js";
+import { GET_PAYMENT_CLIENT_CONFIG } from "../av/methods.js";
+import { PAYMENTS, ORDER_NUMBER, paymentField, PAYMENT_FIELDS } from "../av/fields.js";
 
 const router = express.Router();
 const { ORDER: ORDER_PATH, PAYMENT_METHOD: PAYMENTMETHOD_PATH } = ENDPOINTS;
@@ -19,6 +23,9 @@ const ADYEN_FALLBACK_CONFIG = {
   countryCode: "US",
   currency: "USD",
 };
+
+const newTransactionId = () =>
+  `TXN-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
 // POST /getPaymentClientConfig -> Retrieve Adyen client configuration.
 // Falls back to a static config when unauthenticated or upstream errors,
@@ -31,7 +38,6 @@ router.post("/getPaymentClientConfig", express.json(), async (req, res) => {
     printDebugMessage("No paymentMethodId provided, using fallback config");
     return res.json(ADYEN_FALLBACK_CONFIG);
   }
-
   if (!hasActiveSession()) {
     printDebugMessage("No active session, using fallback config");
     return res.json(ADYEN_FALLBACK_CONFIG);
@@ -40,12 +46,12 @@ router.post("/getPaymentClientConfig", express.json(), async (req, res) => {
   const payload = {
     actions: [
       {
-        method: "getPaymentClientConfig",
+        method: GET_PAYMENT_CLIENT_CONFIG,
         params: { payment_method_id: paymentMethodId },
         acceptWarnings: ACCEPTED_WARNINGS.PAYMENT_CLIENT_CONFIG,
       },
     ],
-    objectName: "myPaymentMethod",
+    objectName: MY_PAYMENT_METHOD,
   };
 
   const { response, data } = await callAv(PAYMENTMETHOD_PATH, payload);
@@ -57,7 +63,10 @@ router.post("/getPaymentClientConfig", express.json(), async (req, res) => {
 
   try {
     const returnData = data?.return?.[0];
-    if (returnData?.method === "getPaymentClientConfig" && returnData?.values?.[0]?.name === "result") {
+    if (
+      returnData?.method === GET_PAYMENT_CLIENT_CONFIG &&
+      returnData?.values?.[0]?.name === "result"
+    ) {
       const adyenConfig = JSON.parse(returnData.values[0].value)?.config;
       if (adyenConfig) {
         printDebugMessage("Payment client config fetched successfully");
@@ -87,17 +96,17 @@ router.post("/getPaymentClientConfig", express.json(), async (req, res) => {
 // POST /getPaymentResponse -> Get gateway configuration for a payment record
 router.post("/getPaymentResponse", express.json(), validate(PaymentIdBody), async (req, res) => {
   const { paymentId } = req.body;
-  const payload = {
-    get: [`Payments::${paymentId}::paymentmethod_gateway_config`],
-    objectName: "myOrder",
-  };
+  const gatewayConfigField = paymentField(paymentId, PAYMENT_FIELDS.PAYMENTMETHOD_GATEWAY_CONFIG);
 
   const result = await callAvManaged(
-    res, ORDER_PATH, payload, "Failed to fetch payment gateway config"
+    res,
+    ORDER_PATH,
+    { get: [gatewayConfigField], objectName: MY_ORDER },
+    "Failed to fetch payment gateway config"
   );
   if (!result) return;
 
-  const gatewayConfig = result.data?.data?.[`Payments::${paymentId}::paymentmethod_gateway_config`];
+  const gatewayConfig = unwrap(result.data, gatewayConfigField);
   if (!gatewayConfig) {
     printDebugMessage("No payment gateway config found in response");
     return res.status(404).json({
@@ -107,19 +116,8 @@ router.post("/getPaymentResponse", express.json(), validate(PaymentIdBody), asyn
     });
   }
 
-  try {
-    const paymentMethodsJson = gatewayConfig.standard || gatewayConfig.display || gatewayConfig.input;
-    if (paymentMethodsJson) {
-      const paymentMethodsConfig = JSON.parse(paymentMethodsJson);
-      printDebugMessage("Payment response fetched successfully");
-      return res.json({
-        success: true,
-        paymentId,
-        paymentMethodsResponse: paymentMethodsConfig,
-        gatewayConfig,
-        rawResponse: result.data,
-      });
-    }
+  const paymentMethodsJson = gatewayConfig.standard || gatewayConfig.display || gatewayConfig.input;
+  if (!paymentMethodsJson) {
     printDebugMessage("No payment methods JSON found in gateway config");
     return res.json({
       success: true,
@@ -127,6 +125,18 @@ router.post("/getPaymentResponse", express.json(), validate(PaymentIdBody), asyn
       gatewayConfig,
       rawResponse: result.data,
       warning: "No payment methods configuration found",
+    });
+  }
+
+  try {
+    const paymentMethodsConfig = JSON.parse(paymentMethodsJson);
+    printDebugMessage("Payment response fetched successfully");
+    return res.json({
+      success: true,
+      paymentId,
+      paymentMethodsResponse: paymentMethodsConfig,
+      gatewayConfig,
+      rawResponse: result.data,
     });
   } catch (parseError) {
     printDebugMessage("Error parsing payment methods JSON");
@@ -141,94 +151,103 @@ router.post("/getPaymentResponse", express.json(), validate(PaymentIdBody), asyn
 });
 
 // POST /processAdyenPayment -> Process Adyen payment data via AudienceView
-router.post("/processAdyenPayment", express.json(), validate(ProcessAdyenPaymentBody), async (req, res) => {
-  const { externalData, paymentId, resetPaymentAttempt } = req.body;
+router.post(
+  "/processAdyenPayment",
+  express.json(),
+  validate(ProcessAdyenPaymentBody),
+  async (req, res) => {
+    const { externalData, paymentId, resetPaymentAttempt } = req.body;
 
-  // Step 1: Set external payment data
-  const setPayload = {
-    set: { [`Payments::${paymentId}::external_payment_data`]: externalData },
-    objectName: "myOrder",
-    get: ["Payments"],
-  };
-  const setResult = await callAvManaged(
-    res, ORDER_PATH, setPayload, "Failed to process Adyen payment"
-  );
-  if (!setResult) return;
+    // 1. Push the Adyen response payload onto the Payment record.
+    const setResult = await callAvManaged(
+      res,
+      ORDER_PATH,
+      {
+        set: { [paymentField(paymentId, PAYMENT_FIELDS.EXTERNAL_PAYMENT_DATA)]: externalData },
+        objectName: MY_ORDER,
+        get: [PAYMENTS],
+      },
+      "Failed to process Adyen payment"
+    );
+    if (!setResult) return;
 
-  // Step 2: Complete transaction
-  const { response: txResp, data: txData } = await insertOrder({
-    resetPaymentAttempt: !!resetPaymentAttempt,
-  });
+    // 2. Re-insert the order so av-avon completes the charge.
+    const { response: txResp, data: txData } = await insertOrder({
+      resetPaymentAttempt: !!resetPaymentAttempt,
+    });
 
-  if (!txResp.ok) {
-    const exceptionKind = classifyException(txData);
-    if (exceptionKind === "threeDS") {
-      printDebugMessage("Transaction completion indicates 3DS required");
-      return handleThreeDS(req, res, { paymentId, transactionData: txData });
-    }
-    if (exceptionKind === "cancelled") {
-      printDebugMessage("Payment cancelled by user");
+    if (!txResp.ok) {
+      const exceptionKind = classifyException(txData);
+      if (exceptionKind === "threeDS") {
+        printDebugMessage("Transaction completion indicates 3DS required");
+        return handleThreeDS(req, res, { paymentId, transactionData: txData });
+      }
+      if (exceptionKind === "cancelled") {
+        printDebugMessage("Payment cancelled by user");
+        return res.status(txResp.status).json({
+          success: false,
+          cancelled: true,
+          error: txData?.exception?.message || "Payment was cancelled",
+          paymentId,
+        });
+      }
+      if (txData?.exception?.message?.toLowerCase().includes("insertunpaid")) {
+        printDebugMessage("Payment requires redirect completion (insertUnpaid)");
+        return handleThreeDS(req, res, { paymentId });
+      }
+      printDebugMessage(`Transaction completion failed: ${txResp.status}`);
       return res.status(txResp.status).json({
         success: false,
-        cancelled: true,
-        error: txData?.exception?.message || "Payment was cancelled",
+        error: "Failed to complete transaction",
+        details: txData,
         paymentId,
       });
     }
-    if (txData?.exception?.message?.toLowerCase().includes("insertunpaid")) {
-      printDebugMessage("Payment requires redirect completion (insertUnpaid)");
-      return handleThreeDS(req, res, { paymentId });
-    }
-    printDebugMessage(`Transaction completion failed: ${txResp.status}`);
-    return res.status(txResp.status).json({
-      success: false,
-      error: "Failed to complete transaction",
-      details: txData,
-      paymentId,
-    });
+
+    printDebugMessage("Adyen payment processed and transaction completed successfully");
+    return redirectToViewOrder(
+      {
+        orderNumber: unwrap(txData, ORDER_NUMBER)?.standard,
+        transactionId: newTransactionId(),
+        actionsJson: txData,
+        respJson: txData,
+        paymentMethod: "Adyen",
+      },
+      res
+    );
   }
-
-  const orderNumber = txData?.data?.["Order::order_number"]?.standard;
-  const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-
-  printDebugMessage("Adyen payment processed and transaction completed successfully");
-  return redirectToViewOrder(
-    {
-      orderNumber,
-      transactionId,
-      actionsJson: txData,
-      respJson: txData,
-      paymentMethod: "Adyen",
-    },
-    res
-  );
-});
+);
 
 // POST /getPaymentMethodType -> Get payment method type for a specific payment ID
-router.post("/getPaymentMethodType", express.json(), validate(PaymentIdBody), async (req, res) => {
-  const { paymentId } = req.body;
-  const payload = {
-    get: [`Payments::${paymentId}::paymentmethod_type`],
-    objectName: "myOrder",
-  };
+router.post(
+  "/getPaymentMethodType",
+  express.json(),
+  validate(PaymentIdBody),
+  async (req, res) => {
+    const { paymentId } = req.body;
+    const typeField = paymentField(paymentId, PAYMENT_FIELDS.PAYMENTMETHOD_TYPE);
 
-  const result = await callAvManaged(
-    res, ORDER_PATH, payload, "Failed to fetch payment method type"
-  );
-  if (!result) return;
+    const result = await callAvManaged(
+      res,
+      ORDER_PATH,
+      { get: [typeField], objectName: MY_ORDER },
+      "Failed to fetch payment method type"
+    );
+    if (!result) return;
 
-  const paymentMethodType = result.data?.data?.[`Payments::${paymentId}::paymentmethod_type`];
-  if (!paymentMethodType) {
-    printDebugMessage("No payment method type found in response");
-    return res.status(404).json({
-      error: "Payment method type not found",
-      paymentId,
-      rawResponse: result.data,
-    });
+    const paymentMethodType = unwrap(result.data, typeField);
+    if (!paymentMethodType) {
+      printDebugMessage("No payment method type found in response");
+      return res.status(404).json({
+        error: "Payment method type not found",
+        paymentId,
+        rawResponse: result.data,
+      });
+    }
+
+    printDebugMessage("Payment method type fetched successfully");
+    res.json({ success: true, paymentId, paymentMethodType, rawResponse: result.data });
   }
-
-  printDebugMessage("Payment method type fetched successfully");
-  res.json({ success: true, paymentId, paymentMethodType, rawResponse: result.data });
-});
+);
 
 export default router;

@@ -1,5 +1,13 @@
 import { ENDPOINTS } from "../../../public/js/endpoints.js";
 import { DEFAULT_CARDHOLDER_NAME } from "../../constants.js";
+import { MY_ORDER } from "../../av/objectNames.js";
+import {
+  ORDER_DELIVERY_METHOD_ID,
+  ORDER_NUMBER,
+  PAYMENTS,
+  paymentField,
+  PAYMENT_FIELDS,
+} from "../../av/fields.js";
 
 const { ORDER: ORDER_PATH } = ENDPOINTS;
 
@@ -9,13 +17,13 @@ export async function setDeliveryAndPayment(ctx, { paymentId, deliveryMethod, pa
     ORDER_PATH,
     {
       set: {
-        "Order::deliverymethod_id": deliveryMethod,
-        [`Payments::${paymentId}::active_payment`]: paymentMethod,
-        [`Payments::${paymentId}::swipe_indicator`]: "Internet",
-        [`Payments::${paymentId}::cardholder_name`]: DEFAULT_CARDHOLDER_NAME,
+        [ORDER_DELIVERY_METHOD_ID]: deliveryMethod,
+        [paymentField(paymentId, PAYMENT_FIELDS.ACTIVE_PAYMENT)]: paymentMethod,
+        [paymentField(paymentId, PAYMENT_FIELDS.SWIPE_INDICATOR)]: "Internet",
+        [paymentField(paymentId, PAYMENT_FIELDS.CARDHOLDER_NAME)]: DEFAULT_CARDHOLDER_NAME,
       },
-      get: ["Order::order_number", "Payments"],
-      objectName: "myOrder",
+      get: [ORDER_NUMBER, PAYMENTS],
+      objectName: MY_ORDER,
     },
     "Checkout failed (set delivery/payment)"
   );
