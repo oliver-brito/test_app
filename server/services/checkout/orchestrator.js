@@ -31,7 +31,7 @@ export async function runCheckoutSequence(res, { deliveryMethod, paymentMethod, 
   if (!details) return null;
 
   return {
-    paymentID: paymentId,
+    paymentId: paymentId,
     payment_details: details.data?.data?.[`Payments::${paymentId}`],
     backendApiCalls: ctx.apiCalls,
   };

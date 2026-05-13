@@ -9,14 +9,14 @@ export async function fetchCheckoutData({ eventId, deliveryMethod, paymentMethod
   });
 }
 
-export async function determineAdyenFlag(paymentID) {
-  if (!paymentID) {
+export async function determineAdyenFlag(paymentId) {
+  if (!paymentId) {
     window.adyen = false;
     return false;
   }
   try {
     const paymentTypeData = await apiCall("/getPaymentMethodType", {
-      body: { paymentID },
+      body: { paymentId },
     });
     if (paymentTypeData.success && paymentTypeData.paymentMethodType) {
       const containsAdyen = Object.values(paymentTypeData.paymentMethodType).some(
@@ -35,7 +35,7 @@ export async function determineAdyenFlag(paymentID) {
 export async function getPaymentConfiguration() {
   const { paymentMethod = "" } = getContext();
   const serverConfig = await apiCall("/getPaymentClientConfig", {
-    body: { paymentMethodId: paymentMethod, eventId: getEventId(), paymentID: window.paymentID },
+    body: { paymentMethodId: paymentMethod, eventId: getEventId(), paymentId: window.paymentId },
   });
   return {
     environment: serverConfig.environment,
@@ -48,7 +48,7 @@ export async function getPaymentConfiguration() {
 export async function getPaymentResponse() {
   try {
     return await apiCall("/getPaymentResponse", {
-      body: { paymentID: window.paymentID },
+      body: { paymentId: window.paymentId },
     });
   } catch (error) {
     console.warn("Failed to fetch payment response from server:", error);
@@ -67,7 +67,7 @@ export async function handleAdyenSubmit(state, dropin) {
     const result = await apiCall("/processAdyenPayment", {
       body: {
         externalData: JSON.stringify(state.data),
-        paymentID: window.paymentID,
+        paymentId: window.paymentId,
         ...(resetEnabled ? { resetPaymentAttempt: true } : {}),
       },
       showErrorModal: false,
@@ -96,7 +96,7 @@ export async function handleAdyenSubmit(state, dropin) {
           endpoint: "/processAdyenPayment",
           error: result.error || "Payment failed",
           status: result.status || 400,
-          request: { body: { paymentID: window.paymentID } },
+          request: { body: { paymentId: window.paymentId } },
           response: result,
         });
       }

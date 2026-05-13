@@ -80,7 +80,7 @@ function encodePaResponseInformation(query) {
  * Handle URL parameters returned from an Adyen 3DS authentication redirect.
  * Encodes the query string and POSTs it to /processThreeDSResponse.
  */
-export async function handleUrlParameters(paymentID) {
+export async function handleUrlParameters(paymentId) {
   const query = window.location.search.substring(1);
   if (!query) return { urlHandled: false };
 
@@ -88,7 +88,7 @@ export async function handleUrlParameters(paymentID) {
   const paResponseUrl = window.location.href || window.location.origin + "/checkout.html";
 
   const payload = {
-    paymentId: paymentID || window.paymentID || window.paymentId || null,
+    paymentId: paymentId || window.paymentId || window.paymentId || null,
     pa_response_information: encoded,
     pa_response_URL: paResponseUrl,
   };

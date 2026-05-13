@@ -40,9 +40,9 @@ export async function ensurePayment(ctx) {
 
   const paymentId = extractPaymentId(paymentsObj);
   if (!paymentId) {
-    printDebugMessage("No paymentID found after addPayment");
+    printDebugMessage("No paymentId found after addPayment");
     ctx.res.status(500).json({
-      error: "No paymentID found after addPayment",
+      error: "No paymentId found after addPayment",
       details: paymentsObj,
       backendApiCalls: ctx.apiCalls,
     });

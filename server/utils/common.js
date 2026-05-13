@@ -5,54 +5,41 @@ import { authHeaders } from "../utils/authHeaders.js";
 import { parseSetCookieHeader, mergeCookiePairs } from "../utils/cookieUtils.js";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { classifyException } from "../services/apiErrors.js";
-// Fallback API_BASE from .env (used only if user hasn't logged in with custom API base)
-export const FALLBACK_API_BASE = process.env.API_BASE || "";
 
 /**
- * Get the current API base URL from session (user's login input) or fallback to .env
+ * Active av-avon base URL: the one the user supplied at /login, falling
+ * back to the .env value for unauthenticated calls (e.g. /getPaymentClientConfig
+ * before login).
  */
-export function getActiveApiBase() {
-    return getApiBase() || FALLBACK_API_BASE;
+function resolveApiBase() {
+  return getApiBase() || process.env.API_BASE || "";
 }
 
-// Backward compatibility: API_BASE getter
-export function API_BASE() {
-    return getActiveApiBase();
-}
+/**
+ * Tiny pre-call check: ensure the session is established and the named
+ * ENDPOINTS key is known. Used by routes that need an authenticated session
+ * (e.g. the Adyen client-config endpoint, which falls back to a static
+ * config when this throws).
+ */
+export function validateCall(request, expectedParams, expectedEndpointKeys, routeName) {
+  printDebugMessage(`Calling endpoint: ${routeName}`);
+  if (!resolveApiBase()) throw new Error("API_BASE is not defined");
+  if (!CURRENT_SESSION) throw new Error("Not authenticated");
 
-
-export function validateCall(request, expectedParams, expectedPaths, endpointName) {
-    printDebugMessage(`Calling endpoint: ${endpointName}`);
-    const apiBase = getActiveApiBase();
-    if (!apiBase || apiBase.length === 0) {
-        throw new Error("API_BASE is not defined");
+  for (const param of expectedParams) {
+    if (!Object.prototype.hasOwnProperty.call(request.body, param)) {
+      throw new Error(`Missing required parameter: ${param}`);
     }
-    if (!CURRENT_SESSION) {
-        throw new Error("Not authenticated");
-    }
-    if (!expectedPaths) {
-        throw new Error("No expected endpoint paths provided for validation");
-    }
-    for (const param of expectedParams) {
-        if (!request.body.hasOwnProperty(param)) {
-            throw new Error(`Missing required parameter: ${param}`);
-        }
-    }
-    for (const pathKey of expectedPaths) {
-        // it could be NAME_PATH or NAME
-        var endpointName = ENDPOINTS[pathKey] || ENDPOINTS[pathKey.replace(/_PATH$/, '')]; 
-        if (!endpointName) {
-            throw new Error(`Missing required endpoint path: ${pathKey}`);
-        }
-
-    }
-
-
+  }
+  for (const key of expectedEndpointKeys || []) {
+    const resolved = ENDPOINTS[key] || ENDPOINTS[key.replace(/_PATH$/, "")];
+    if (!resolved) throw new Error(`Missing required endpoint path: ${key}`);
+  }
 }
 
 export async function sendCall(path, payload, manual=false) {
     try{
-        const apiBase = getActiveApiBase();
+        const apiBase = resolveApiBase();
         if (!apiBase || apiBase.length === 0) {
             throw new Error("API_BASE is not defined");
         }
@@ -150,7 +137,7 @@ function generateApiCallTitle(payload) {
 
 export async function makeApiCall(path, payload, manual = false) {
     const startTime = Date.now();
-    const apiBase = getActiveApiBase();
+    const apiBase = resolveApiBase();
     const fullUrl = `${apiBase}${path}`;
 
     const response = await sendCall(path, payload, manual);

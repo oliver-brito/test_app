@@ -23,12 +23,12 @@ function parsePaRequestInfo(raw) {
  * Issue a 402 response containing the 3DS challenge inputs (pa_request_information
  * + pa_request_URL) the browser-side flow needs to launch the Cardinal iframe.
  */
-export async function handleThreeDS(req, res, { paymentID } = {}) {
+export async function handleThreeDS(req, res, { paymentId } = {}) {
   try {
     const payload = {
       get: [
-        `Payments::${paymentID}::pa_request_information`,
-        `Payments::${paymentID}::pa_request_URL`,
+        `Payments::${paymentId}::pa_request_information`,
+        `Payments::${paymentId}::pa_request_URL`,
       ],
       objectName: "myOrder",
     };
@@ -37,17 +37,17 @@ export async function handleThreeDS(req, res, { paymentID } = {}) {
     await handleSetCookies(response);
     const data = await parseResponse(response);
 
-    const paObj = data?.data?.[`Payments::${paymentID}::pa_request_information`];
+    const paObj = data?.data?.[`Payments::${paymentId}::pa_request_information`];
     const paJsonStr = paObj?.standard || paObj?.input || paObj?.display || null;
 
     const paInfo = paJsonStr ? parsePaRequestInfo(paJsonStr) : null;
-    const paURL = paJsonStr ? data?.data?.[`Payments::${paymentID}::pa_request_URL`] : null;
+    const paURL = paJsonStr ? data?.data?.[`Payments::${paymentId}::pa_request_URL`] : null;
 
     return res.status(402).json({
       success: false,
       error: "3ds required",
       code: EXCEPTION_CODES.THREE_DS_REQUIRED,
-      paymentID,
+      paymentId,
       paRequestInfo: paInfo,
       paRequestURL: paURL,
       rawResponse: data,

@@ -39,7 +39,7 @@ describe("payments schemas", () => {
   });
 
   describe("ProcessAdyenPaymentBody", () => {
-    it("requires externalData and paymentID", () => {
+    it("requires externalData and paymentId", () => {
       expect(ProcessAdyenPaymentBody.safeParse({}).success).toBe(false);
     });
 
@@ -47,7 +47,7 @@ describe("payments schemas", () => {
       expect(
         ProcessAdyenPaymentBody.safeParse({
           externalData: { foo: "bar" },
-          paymentID: "PMT-1",
+          paymentId: "PMT-1",
           resetPaymentAttempt: true,
         }).success
       ).toBe(true);
@@ -55,11 +55,11 @@ describe("payments schemas", () => {
   });
 
   describe("PaymentIdBody", () => {
-    it("accepts a paymentID", () => {
-      expect(PaymentIdBody.safeParse({ paymentID: "PMT-1" }).success).toBe(true);
+    it("accepts a paymentId", () => {
+      expect(PaymentIdBody.safeParse({ paymentId: "PMT-1" }).success).toBe(true);
     });
 
-    it("rejects missing paymentID", () => {
+    it("rejects missing paymentId", () => {
       expect(PaymentIdBody.safeParse({}).success).toBe(false);
     });
   });

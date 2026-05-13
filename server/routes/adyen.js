@@ -88,9 +88,9 @@ router.post("/getPaymentClientConfig", express.json(), async (req, res) => {
 
 // POST /getPaymentResponse -> Get gateway configuration for a payment record
 router.post("/getPaymentResponse", express.json(), validate(PaymentIdBody), async (req, res) => {
-  const { paymentID } = req.body;
+  const { paymentId } = req.body;
   const payload = {
-    get: [`Payments::${paymentID}::paymentmethod_gateway_config`],
+    get: [`Payments::${paymentId}::paymentmethod_gateway_config`],
     objectName: "myOrder",
   };
 
@@ -99,12 +99,12 @@ router.post("/getPaymentResponse", express.json(), validate(PaymentIdBody), asyn
   );
   if (!result) return;
 
-  const gatewayConfig = result.data?.data?.[`Payments::${paymentID}::paymentmethod_gateway_config`];
+  const gatewayConfig = result.data?.data?.[`Payments::${paymentId}::paymentmethod_gateway_config`];
   if (!gatewayConfig) {
     printDebugMessage("No payment gateway config found in response");
     return res.status(404).json({
       error: "Payment gateway config not found",
-      paymentID,
+      paymentId,
       rawResponse: result.data,
     });
   }
@@ -116,7 +116,7 @@ router.post("/getPaymentResponse", express.json(), validate(PaymentIdBody), asyn
       printDebugMessage("Payment response fetched successfully");
       return res.json({
         success: true,
-        paymentID,
+        paymentId,
         paymentMethodsResponse: paymentMethodsConfig,
         gatewayConfig,
         rawResponse: result.data,
@@ -125,7 +125,7 @@ router.post("/getPaymentResponse", express.json(), validate(PaymentIdBody), asyn
     printDebugMessage("No payment methods JSON found in gateway config");
     return res.json({
       success: true,
-      paymentID,
+      paymentId,
       gatewayConfig,
       rawResponse: result.data,
       warning: "No payment methods configuration found",
@@ -134,7 +134,7 @@ router.post("/getPaymentResponse", express.json(), validate(PaymentIdBody), asyn
     printDebugMessage("Error parsing payment methods JSON");
     return res.json({
       success: true,
-      paymentID,
+      paymentId,
       gatewayConfig,
       rawResponse: result.data,
       parseError: parseError.message,
@@ -144,11 +144,11 @@ router.post("/getPaymentResponse", express.json(), validate(PaymentIdBody), asyn
 
 // POST /processAdyenPayment -> Process Adyen payment data via AudienceView
 router.post("/processAdyenPayment", express.json(), validate(ProcessAdyenPaymentBody), async (req, res) => {
-  const { externalData, paymentID, resetPaymentAttempt } = req.body;
+  const { externalData, paymentId, resetPaymentAttempt } = req.body;
 
   // Step 1: Set external payment data
   const setPayload = {
-    set: { [`Payments::${paymentID}::external_payment_data`]: externalData },
+    set: { [`Payments::${paymentId}::external_payment_data`]: externalData },
     objectName: "myOrder",
     get: ["Payments"],
   };
@@ -166,7 +166,7 @@ router.post("/processAdyenPayment", express.json(), validate(ProcessAdyenPayment
     const exceptionKind = classifyException(txData);
     if (exceptionKind === "threeDS") {
       printDebugMessage("Transaction completion indicates 3DS required");
-      return handleThreeDS(req, res, { paymentID, transactionData: txData });
+      return handleThreeDS(req, res, { paymentId, transactionData: txData });
     }
     if (exceptionKind === "cancelled") {
       printDebugMessage("Payment cancelled by user");
@@ -174,19 +174,19 @@ router.post("/processAdyenPayment", express.json(), validate(ProcessAdyenPayment
         success: false,
         cancelled: true,
         error: txData?.exception?.message || "Payment was cancelled",
-        paymentID,
+        paymentId,
       });
     }
     if (txData?.exception?.message?.toLowerCase().includes("insertunpaid")) {
       printDebugMessage("Payment requires redirect completion (insertUnpaid)");
-      return handleThreeDS(req, res, { paymentID });
+      return handleThreeDS(req, res, { paymentId });
     }
     printDebugMessage(`Transaction completion failed: ${txResp.status}`);
     return res.status(txResp.status).json({
       success: false,
       error: "Failed to complete transaction",
       details: txData,
-      paymentID,
+      paymentId,
     });
   }
 
@@ -208,9 +208,9 @@ router.post("/processAdyenPayment", express.json(), validate(ProcessAdyenPayment
 
 // POST /getPaymentMethodType -> Get payment method type for a specific payment ID
 router.post("/getPaymentMethodType", express.json(), validate(PaymentIdBody), async (req, res) => {
-  const { paymentID } = req.body;
+  const { paymentId } = req.body;
   const payload = {
-    get: [`Payments::${paymentID}::paymentmethod_type`],
+    get: [`Payments::${paymentId}::paymentmethod_type`],
     objectName: "myOrder",
   };
 
@@ -219,18 +219,18 @@ router.post("/getPaymentMethodType", express.json(), validate(PaymentIdBody), as
   );
   if (!result) return;
 
-  const paymentMethodType = result.data?.data?.[`Payments::${paymentID}::paymentmethod_type`];
+  const paymentMethodType = result.data?.data?.[`Payments::${paymentId}::paymentmethod_type`];
   if (!paymentMethodType) {
     printDebugMessage("No payment method type found in response");
     return res.status(404).json({
       error: "Payment method type not found",
-      paymentID,
+      paymentId,
       rawResponse: result.data,
     });
   }
 
   printDebugMessage("Payment method type fetched successfully");
-  res.json({ success: true, paymentID, paymentMethodType, rawResponse: result.data });
+  res.json({ success: true, paymentId, paymentMethodType, rawResponse: result.data });
 });
 
 export default router;

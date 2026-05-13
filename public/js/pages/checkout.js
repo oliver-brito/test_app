@@ -31,14 +31,14 @@ async function doCheckout() {
     const payment_details = data.payment_details || {};
     let pa_request_url = payment_details.pa_request_URL?.standard || "";
     let conversationToken = payment_details.server_to_client_token?.standard || "";
-    let paymentID = payment_details.payment_id?.standard || "";
-    window.paymentID = paymentID;
-    setContext({ paymentID });
-    await determineAdyenFlag(paymentID);
+    let paymentId = payment_details.payment_id?.standard || "";
+    window.paymentId = paymentId;
+    setContext({ paymentId });
+    await determineAdyenFlag(paymentId);
 
-    const tokens = allowOverrideFromHashMaybe({ conversationToken, paymentID });
+    const tokens = allowOverrideFromHashMaybe({ conversationToken, paymentId });
     conversationToken = tokens.conversationToken;
-    paymentID = tokens.paymentID;
+    paymentId = tokens.paymentId;
 
     renderCheckoutInfo(
       resultDiv,
@@ -48,7 +48,7 @@ async function doCheckout() {
       paymentMethod,
       pa_request_url,
       conversationToken,
-      paymentID
+      paymentId
     );
 
     if (window.adyen) {
@@ -61,7 +61,7 @@ async function doCheckout() {
     }
 
     const convRef = { value: conversationToken, eventId, deliveryMethod, paymentMethod, pa_request_url };
-    const pidRef = { value: paymentID };
+    const pidRef = { value: paymentId };
     wireChangeInfoButton(convRef, pidRef, resultDiv);
   } catch (err) {
     resultDiv.innerHTML = `<div class="error">Checkout failed: ${err.message}</div>`;
@@ -71,13 +71,13 @@ async function doCheckout() {
 async function doCheckoutReusePayment() {
   const ctx = getCheckoutContext();
   const { eventId, deliveryMethod, paymentMethod, resultDiv } = ctx;
-  const existingPaymentID = getContext().paymentID;
+  const existingPaymentID = getContext().paymentId;
 
   if (!existingPaymentID) return doCheckout();
 
   resultDiv.innerHTML = '<div class="muted">Resuming payment session…</div>';
   try {
-    window.paymentID = existingPaymentID;
+    window.paymentId = existingPaymentID;
     await determineAdyenFlag(existingPaymentID);
     if (!window.adyen) return doCheckout();
     renderCheckoutInfo(resultDiv, window.adyen, eventId, deliveryMethod, paymentMethod, "", "", existingPaymentID);
@@ -98,7 +98,7 @@ window.doCheckoutReusePayment = doCheckoutReusePayment;
   if (!(await checkAndRefreshAuth())) return;
 
   try {
-    const storedPaymentID = getContext().paymentID;
+    const storedPaymentID = getContext().paymentId;
     let result = handleUrlParameters(storedPaymentID);
     if (result && typeof result.then === "function") result = await result;
 
