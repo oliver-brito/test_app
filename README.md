@@ -1,10 +1,11 @@
 # test_app
 
-A demo Node/Express app that exercises the AudienceView (av-avon) API end-to-end
-through the browser: login → events listing → seat selection → checkout →
-Adyen Drop-in (with 3DS challenge) → order confirmation. Used as a sandbox
-to reproduce payment-flow scenarios that are hard to repro inside the full
-AudienceView UI.
+A demo Node/Express app that exercises the AudienceView (av-avon) API
+end-to-end through the browser: login → events listing → seat selection →
+checkout → Adyen Drop-in (with 3DS challenge) → order confirmation.
+
+Used as a sandbox to reproduce payment-flow scenarios that are hard to
+repro inside the full AudienceView UI.
 
 ## Setup
 
@@ -28,253 +29,19 @@ npm run dev
 
 Then open **https://localhost:3443**.
 
-| Script              | What it does                                        |
-| ------------------- | --------------------------------------------------- |
-| `npm start`         | Run the server once.                                |
-| `npm run dev`       | Run with `nodemon` (auto-restart on server edits).  |
-| `npm test`          | Run the vitest suite.                               |
-| `npm run lint`      | ESLint over `server/` and `public/js/`.             |
-| `npm run format`    | Prettier write-mode.                                |
+| Script | What it does |
+| --- | --- |
+| `npm start`      | Run the server once. |
+| `npm run dev`    | Run with `nodemon` (auto-restart on server edits). |
+| `npm test`       | Run the vitest suite. |
+| `npm run lint`   | ESLint over `server/` and `public/js/`. |
+| `npm run format` | Prettier write-mode. |
 
-## Architecture in 5 minutes
+## Where to go next
 
-```
-┌──────────────────┐   fetch /xxx   ┌──────────────────┐  POST   ┌──────────┐
-│  Browser         │ ─────────────► │  Express server  │ ──────► │ av-avon  │
-│  public/js/...   │                │  server/...      │         └──────────┘
-└──────────────────┘ ◄───────────── └──────────────────┘
-   ES modules                          Express 5 + zod
-```
-
-**Request flow:**
-1. A page (`public/<page>.html`) loads one ES module entry (`public/js/pages/<page>.js`).
-2. The entry imports `shared/api.js`, calls `apiCall("/something", { body })`.
-3. The Express route in `server/routes/<area>.js` validates the body with a
-   zod schema (`server/schemas/`), then calls a service in `server/services/`.
-4. The service uses `makeApiCallWithErrorHandling` from `server/utils/common.js`
-   to talk to av-avon, automatically forwarding cookies + session.
-5. On success → JSON. On 4294 → 3DS challenge flow. On any thrown error →
-   `server/middleware/errorHandler.js` returns a structured JSON error.
-
-### Backend layout
-
-```
-server/
-  index.js                    bootstrap (binds the port)
-  app.js                      createApp() — used by index.js and tests
-  config/
-    env.js                    loads + validates .env
-    security.js               helmet CSP for Adyen/Google/Apple/Cardinal
-    https.js                  async cert loading
-  middleware/
-    errorHandler.js           central 4-arg error handler + ApiError class
-    validate.js               zod body-validation middleware factory
-  routes/                     one router per area; thin handlers
-  schemas/                    zod schemas applied to each route
-  services/
-    apiClient.* (in utils/common.js)
-    apiErrors.js              classifyException → 'threeDS' | 'cancelled' | 'other'
-    order.js                  insertOrder, redirectToViewOrder
-    threeDSChallenge.js       handleThreeDS (issues the 402 challenge)
-    checkout/
-      context.js              per-request ctx with auto apiCalls collection
-      getCustomerId.js
-      addCustomer.js
-      ensurePayment.js
-      setDeliveryAndPayment.js
-      getClientToken.js
-      getPaymentDetails.js
-      orchestrator.js         composes the 6 steps; replaces the old 130-line procedure
-  constants.js                exception codes, accepted warnings, cardholder name
-  utils/
-    common.js                 sendCall + makeApiCall + cookie handling
-    authHeaders.js, cookieUtils.js, sessionStore.js, debug.js
-```
-
-### Frontend layout
-
-```
-public/
-  <page>.html                 each page loads one <script type="module">
-  js/
-    endpoints.js              shared route-name constants (imported by server too)
-    pages/                    one entry per HTML page
-    flows/
-      paymentFlow.js          handleSubmit → /transaction → 3DS? → redirect
-      threeDS.js              Cardinal iframe + postMessage handler
-    ui/
-      submitUI.js             submit button state + error/success banners
-      checkoutDom.js          renders the checkout summary panel
-      errorModal.js           floating API-error modal
-      apiDebugConsole.js      bottom-panel API call log (Ctrl+`)
-      navigation.js           top nav + logout + object-type filter
-    shared/
-      api.js                  apiCall() wrapper with auto error/log handling
-      auth.js                 checkAndRefreshAuth()
-      checkoutContext.js      sessionStorage-backed cross-page state
-      helpers.js, detailsModal.js
-    adyen/
-      adyenApi.js             /processAdyenPayment etc. helpers
-      adyenDropin.js          renderAdyenDropIn + 3DS URL return handler
-      hostedFields.js         AvHostedInputSDK wrapper
-```
-
-## How to add things
-
-### A new route
-
-Every route follows the same **define-and-mount** pattern: declare a named
-const via `handler({ body, run })` above the bottom-of-file route table.
-
-1. If the route accepts a body, write a zod schema in `server/schemas/<area>.js`.
-2. In `server/routes/<area>.js`, define the handler and mount it:
-   ```js
-   import { handler } from "../middleware/handler.js";
-   import { ApiError } from "../middleware/errorHandler.js";
-   import { av } from "../services/av.js";
-   import { unwrap } from "../services/avResponse.js";
-   import { MyBody } from "../schemas/area.js";
-
-   const myEndpoint = handler({
-     body: MyBody,
-     async run({ paymentId }) {
-       const { data } = await av
-         .on(MY_ORDER)
-         .get(FIELD)
-         .post(ORDER_PATH)
-         .orFail("Something went wrong");
-
-       const value = unwrap(data, FIELD);
-       if (!value) throw new ApiError(404, "Not found");
-       return { success: true, value };
-     },
-   });
-
-   router.post("/myEndpoint", myEndpoint);
-   ```
-3. Register the router in `server/app.js` if it's a new file.
-
-**The standard handler shape, top to bottom:**
-- `run({ ...params, ...body, ...query }, { req, res })`
-- Build an av call with the `av` fluent builder. `.post(path).orFail(msg)`
-  throws `ApiError` on upstream failure; bare `.post(path)` returns the
-  raw triple.
-- `return` a plain object — the factory sends it as JSON and auto-appends
-  the per-request `backendApiCalls` trail.
-- `throw new ApiError(status, message, { details })` for explicit errors.
-- Return `undefined` only when something downstream already wrote the
-  response (e.g. `handleThreeDS`, `redirectToViewOrder`).
-
-### Request / response field standard
-
-All HTTP field names — both request body keys validated by zod and
-response body keys returned by handlers — are **camelCase**. The route
-translates to av-avon's snake_case wire format at the boundary
-(see `server/av/fields.js`'s `PAYMENT_FIELDS` constants).
-
-**Identifiers** carry an `Id` suffix:
-`paymentId`, `admissionId`, `eventId`, `priceTypeId`, `paymentMethodId`.
-
-**User-chosen options** carry a `Method` suffix where ambiguous:
-`deliveryMethod`, `paymentMethod`. The Adyen gateway's payment-method
-*identifier* is `paymentMethodId` (an Id), distinct from the chosen
-`paymentMethod` value.
-
-**Booleans** are written in affirmative form (`resetPaymentAttempt`,
-not `disableResetPaymentAttempt`).
-
-**Acronyms** stay uppercase: `paResponseURL`, `paRequestURL`, `apiBase`.
-
-**Response envelope:**
-
-```js
-// Success — returned by handler `run`
-{ success: true, ...domainFields, rawResponse?, backendApiCalls? }
-
-// Error — thrown via ApiError, formatted by middleware/errorHandler.js
-{ success: false, error, message, code?, status, details?, backendApiCalls? }
-```
-
-- Every success response carries `success: true`. Error responses carry
-  `success: false`.
-- Domain fields are **flat** at the top level (no `data:` or `response:`
-  wrapper). One exception: `/map/availability/:id` spreads the raw av-avon
-  body so the UI can read `data.data.Admissions`.
-- `rawResponse` is the optional full av-avon body, used by the UI's debug
-  flows (e.g. `event.js`'s `refreshSeats()`).
-- `backendApiCalls` is automatically appended by the handler factory —
-  routes should never write it by hand.
-
-### A new page
-
-1. Add `public/<page>.html` with a single `<script type="module" src="js/pages/<page>.js">`.
-2. Create `public/js/pages/<page>.js`:
-   ```js
-   import "../ui/errorModal.js";
-   import "../ui/apiDebugConsole.js";
-   import "../ui/navigation.js";
-   import { apiCall } from "../shared/api.js";
-   import { checkAndRefreshAuth } from "../shared/auth.js";
-
-   if (!(await checkAndRefreshAuth())) /* will redirect */;
-   // ...page logic
-   ```
-
-### A new checkout step
-
-Each step lives in `server/services/checkout/<step>.js` and accepts the
-shared `ctx` (per-request state + the auto-logging `ctx.call`):
-
-```js
-export async function myNewStep(ctx, { paymentId }) {
-  return ctx.call(
-    ORDER_PATH,
-    { /* payload */ },
-    "Checkout failed (myNewStep)"
-  );
-}
-```
-
-Then plug it into `server/services/checkout/orchestrator.js` in the right
-position. Each `ctx.call` automatically pushes its API metadata into
-`ctx.apiCalls`, which is returned to the UI's debug console.
-
-## Tests
-
-```bash
-npm test
-```
-
-Coverage is intentionally narrow — the high-leverage paths only:
-
-- `tests/services/apiErrors.test.js` — `classifyException` matrix.
-- `tests/schemas/payments.test.js` — zod validation for the payment routes.
-- `tests/services/checkout/orchestrator.test.js` — step order, skip-addPayment, short-circuit.
-- `tests/routes/transaction.test.js` — `/transaction` via supertest (zod 400, happy 200, upstream 502).
-
-## Known constraints
-
-- The Adyen + 3DS flow is exercised against **event 01**, configured with
-  Adyen CC as a payment method and "pick up later" as the delivery method.
-- Real Adyen 3DS responses require a live av-avon environment; the test
-  suite mocks the upstream so it can run anywhere.
-- `/proxy` is an authenticated relay used by the API debug console — it's a
-  test-only escape hatch and shouldn't be enabled outside of dev.
-- The default cardholder name is hard-coded (`server/constants.js`) because
-  the value comes from the hosted-fields widget at runtime but av-avon
-  still requires the field to be set when calling `getPaymentClientToken`.
-
-## Repo layout at a glance
-
-```
-.
-├── server/                Express app, services, schemas, middleware
-├── public/                Static assets + ES module frontend
-├── tests/                 vitest suite
-├── certs/                 (gitignored) localhost TLS certs
-├── .env                   (gitignored)
-├── eslint.config.js
-├── .prettierrc.json
-├── nodemon.json
-└── package.json
-```
+- **[CLAUDE.md](./CLAUDE.md)** — full project context: architecture,
+  coding standards, how to add a route / page / checkout step, debugging
+  tips, glossary, file pointers. Read this first.
+- **[DOC.md](./DOC.md)** — request lifecycle: how one HTTP call moves
+  from the browser through Express, the `av` builder, and back. Read
+  this when you need to understand a specific layer.
