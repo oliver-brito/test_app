@@ -1,0 +1,6 @@
+{
+  "watch": ["endpoints"],
+  "ext": "js,json",
+  "ignore": ["public/**", "tests/**", "node_modules/**"],
+  "delay": 200
+}
