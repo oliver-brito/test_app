@@ -2,7 +2,7 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { callAvManaged } from "../services/avClient.js";
+import { av } from "../services/av.js";
 import { MY_CUSTOMER } from "../av/objectNames.js";
 import { CUSTOMER, PAYMENTS, CONTACTS, ADDRESSES } from "../av/fields.js";
 
@@ -10,12 +10,11 @@ const router = express.Router();
 const { CUSTOMER: CUSTOMER_PATH } = ENDPOINTS;
 
 router.post("/getMyAccountDetails", express.json(), async (req, res) => {
-  const result = await callAvManaged(
-    
-    CUSTOMER_PATH,
-    { get: [CUSTOMER, PAYMENTS, CONTACTS, ADDRESSES], objectName: MY_CUSTOMER },
-    "Failed to load customer details"
-  );
+  const result = await av
+    .on(MY_CUSTOMER)
+    .get(CUSTOMER, PAYMENTS, CONTACTS, ADDRESSES)
+    .post(CUSTOMER_PATH)
+    .orFail("Failed to load customer details");
 
   // av-avon soft-error pattern: 200 status but an errorCode/message in the body.
   if (result.data?.errorCode || /error/i.test(result.data?.message || "")) {

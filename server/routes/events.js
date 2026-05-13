@@ -4,7 +4,7 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { callAvManaged } from "../services/avClient.js";
+import { av } from "../services/av.js";
 import { unwrap } from "../services/avResponse.js";
 import { validate } from "../middleware/validate.js";
 import { MapAvailabilityBody } from "../schemas/seats.js";
@@ -55,19 +55,18 @@ router.get("/events/upcoming", async (req, res) => {
   const movePage = parseInt(req.query.movePage);
   const objectType = req.query.objectType || "P";
 
-  const payload = {
-    actions: [{ method: pageMethod(movePage) }],
-    set: {
+  const result = await av
+    .on(MY_SEARCH_RESULTS)
+    .action(pageMethod(movePage))
+    .set({
       [SEARCH_OBJECT_TYPE]: objectType,
       [SEARCH_QUERY]: "",
       [SEARCH_FROM]: "",
       [SEARCH_TO]: "",
-    },
-    get: [SEARCH_TOTAL_RECORDS, SEARCH_CURRENT_PAGE, SEARCH_TOTAL_PAGES, SEARCH_RESULTS],
-    objectName: MY_SEARCH_RESULTS,
-  };
-
-  const result = await callAvManaged(UPCOMING_PATH, payload, "Upcoming failed");
+    })
+    .get(SEARCH_TOTAL_RECORDS, SEARCH_CURRENT_PAGE, SEARCH_TOTAL_PAGES, SEARCH_RESULTS)
+    .post(UPCOMING_PATH)
+    .orFail("Upcoming failed");
 
   if (result.data?.errorCode || /error/i.test(result.data?.message || "")) {
     printDebugMessage("Events upcoming soft error");
@@ -95,23 +94,17 @@ router.post(
     const performanceId = req.params.id;
     const { priceTypeId, numSeats } = req.body;
 
-    const payload = {
-      actions: [
-        {
-          method: GET_BEST_AVAILABLE,
-          params: {
-            perfVector: [performanceId],
-            reqRows: "1",
-            [`reqNum::${priceTypeId}`]: String(numSeats),
-            optNum: "2",
-          },
-        },
-      ],
-      get: [ADMISSIONS, AVAILABLE_PAYMENT_METHODS, DELIVERY_METHOD_DETAILS],
-      objectName: MY_ORDER,
-    };
-
-    const result = await callAvManaged(ORDER_PATH, payload, "getBestAvailable failed");
+    const result = await av
+      .on(MY_ORDER)
+      .action(GET_BEST_AVAILABLE, {
+        perfVector: [performanceId],
+        reqRows: "1",
+        [`reqNum::${priceTypeId}`]: String(numSeats),
+        optNum: "2",
+      })
+      .get(ADMISSIONS, AVAILABLE_PAYMENT_METHODS, DELIVERY_METHOD_DETAILS)
+      .post(ORDER_PATH)
+      .orFail("getBestAvailable failed");
 
     printDebugMessage("Map availability fetched successfully");
     res.json({
@@ -123,13 +116,13 @@ router.post(
 
 router.get("/events/:id", async (req, res) => {
   const performanceId = req.params.id;
-  const payload = {
-    actions: [{ method: LOAD, params: { Performance: { performance_id: performanceId } } }],
-    get: [PERFORMANCE],
-    objectName: MY_PERFORMANCE,
-  };
 
-  const result = await callAvManaged(PERFORMANCE_PATH, payload, "performance.load failed");
+  const result = await av
+    .on(MY_PERFORMANCE)
+    .action(LOAD, { Performance: { performance_id: performanceId } })
+    .get(PERFORMANCE)
+    .post(PERFORMANCE_PATH)
+    .orFail("performance.load failed");
 
   const perf = unwrap(result.data, PERFORMANCE);
   if (!perf) {
@@ -151,16 +144,14 @@ router.get("/events/:id", async (req, res) => {
 
 router.post("/map/pricing/:id", async (req, res) => {
   const performanceId = req.params.id;
-  const payload = {
-    actions: [
-      { method: LOAD_BEST_AVAILABLE, params: { performance_ids: [performanceId] } },
-      { method: LOAD_AVAILABILITY, params: { performance_ids: [performanceId] } },
-    ],
-    get: [PRICETYPES],
-    objectName: MY_MAP,
-  };
 
-  const result = await callAvManaged(MAP_PATH, payload, "loadMap(pricing) failed");
+  const result = await av
+    .on(MY_MAP)
+    .action(LOAD_BEST_AVAILABLE, { performance_ids: [performanceId] })
+    .action(LOAD_AVAILABILITY, { performance_ids: [performanceId] })
+    .get(PRICETYPES)
+    .post(MAP_PATH)
+    .orFail("loadMap(pricing) failed");
 
   printDebugMessage("Map pricing fetched successfully");
   res.json({

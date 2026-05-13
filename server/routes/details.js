@@ -2,7 +2,7 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { callAvManaged } from "../services/avClient.js";
+import { av } from "../services/av.js";
 import { unwrap } from "../services/avResponse.js";
 import { MY_ORDER } from "../av/objectNames.js";
 import { ORDER, ADMISSIONS, PAYMENTS } from "../av/fields.js";
@@ -11,35 +11,33 @@ const { ORDER: ORDER_PATH } = ENDPOINTS;
 const router = express.Router();
 
 router.get("/order", async (req, res) => {
-  const result = await callAvManaged(
-    
-    ORDER_PATH,
-    { get: [ORDER, ADMISSIONS], objectName: MY_ORDER },
-    "Failed to fetch order details"
-  );
+  const { data } = await av
+    .on(MY_ORDER)
+    .get(ORDER, ADMISSIONS)
+    .post(ORDER_PATH)
+    .orFail("Failed to fetch order details");
 
   printDebugMessage("Order details fetched successfully");
   res.json({
     success: true,
-    order: unwrap(result.data, ORDER) || {},
-    rawResponse: result.data,
-    admissions: unwrap(result.data, ADMISSIONS) || {},
+    order: unwrap(data, ORDER) || {},
+    rawResponse: data,
+    admissions: unwrap(data, ADMISSIONS) || {},
   });
 });
 
 router.get("/details", async (req, res) => {
-  const result = await callAvManaged(
-    
-    ORDER_PATH,
-    { get: [PAYMENTS], objectName: MY_ORDER },
-    "Failed to fetch payment details"
-  );
+  const { data } = await av
+    .on(MY_ORDER)
+    .get(PAYMENTS)
+    .post(ORDER_PATH)
+    .orFail("Failed to fetch payment details");
 
   printDebugMessage("Payment details fetched successfully");
   res.json({
     success: true,
-    payments: unwrap(result.data, PAYMENTS) || {},
-    rawResponse: result.data,
+    payments: unwrap(data, PAYMENTS) || {},
+    rawResponse: data,
   });
 });
 

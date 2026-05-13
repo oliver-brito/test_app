@@ -5,7 +5,7 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { callAv, callAvManaged, hasActiveSession } from "../services/avClient.js";
+import { av, hasActiveSession } from "../services/av.js";
 import { classifyException } from "../services/apiErrors.js";
 import { unwrap } from "../services/avResponse.js";
 import { ACCEPTED_WARNINGS } from "../constants.js";
@@ -39,16 +39,14 @@ router.post("/getPaymentClientConfig", express.json(), async (req, res) => {
     return res.json(ADYEN_FALLBACK_CONFIG);
   }
 
-  const { response, data } = await callAv(PAYMENTMETHOD_PATH, {
-    actions: [
-      {
-        method: GET_PAYMENT_CLIENT_CONFIG,
-        params: { payment_method_id: paymentMethodId },
-        acceptWarnings: ACCEPTED_WARNINGS.PAYMENT_CLIENT_CONFIG,
-      },
-    ],
-    objectName: MY_PAYMENT_METHOD,
-  });
+  const { response, data } = await av
+    .on(MY_PAYMENT_METHOD)
+    .action(
+      GET_PAYMENT_CLIENT_CONFIG,
+      { payment_method_id: paymentMethodId },
+      { acceptWarnings: ACCEPTED_WARNINGS.PAYMENT_CLIENT_CONFIG }
+    )
+    .post(PAYMENTMETHOD_PATH);
 
   if (!response.ok) {
     return res.json({ ...ADYEN_FALLBACK_CONFIG, apiError: data });
@@ -66,11 +64,11 @@ router.post("/getPaymentResponse", express.json(), validate(PaymentIdBody), asyn
   const { paymentId } = req.body;
   const gatewayConfigField = paymentField(paymentId, PAYMENT_FIELDS.PAYMENTMETHOD_GATEWAY_CONFIG);
 
-  const result = await callAvManaged(
-    ORDER_PATH,
-    { get: [gatewayConfigField], objectName: MY_ORDER },
-    "Failed to fetch payment gateway config"
-  );
+  const result = await av
+    .on(MY_ORDER)
+    .get(gatewayConfigField)
+    .post(ORDER_PATH)
+    .orFail("Failed to fetch payment gateway config");
 
   const gatewayConfig = unwrap(result.data, gatewayConfigField);
   if (!gatewayConfig) {
@@ -99,15 +97,12 @@ router.post(
   async (req, res) => {
     const { externalData, paymentId, resetPaymentAttempt } = req.body;
 
-    await callAvManaged(
-      ORDER_PATH,
-      {
-        set: { [paymentField(paymentId, PAYMENT_FIELDS.EXTERNAL_PAYMENT_DATA)]: externalData },
-        objectName: MY_ORDER,
-        get: [PAYMENTS],
-      },
-      "Failed to process Adyen payment"
-    );
+    await av
+      .on(MY_ORDER)
+      .set({ [paymentField(paymentId, PAYMENT_FIELDS.EXTERNAL_PAYMENT_DATA)]: externalData })
+      .get(PAYMENTS)
+      .post(ORDER_PATH)
+      .orFail("Failed to process Adyen payment");
 
     const { response: txResp, data: txData } = await insertOrder({
       resetPaymentAttempt: !!resetPaymentAttempt,
@@ -157,11 +152,11 @@ router.post(
     const { paymentId } = req.body;
     const typeField = paymentField(paymentId, PAYMENT_FIELDS.PAYMENTMETHOD_TYPE);
 
-    const result = await callAvManaged(
-      ORDER_PATH,
-      { get: [typeField], objectName: MY_ORDER },
-      "Failed to fetch payment method type"
-    );
+    const result = await av
+      .on(MY_ORDER)
+      .get(typeField)
+      .post(ORDER_PATH)
+      .orFail("Failed to fetch payment method type");
 
     const paymentMethodType = unwrap(result.data, typeField);
     if (!paymentMethodType) {

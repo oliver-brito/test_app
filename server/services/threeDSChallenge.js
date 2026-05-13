@@ -2,7 +2,7 @@
 // "3DS required" on an order insert.
 
 import { ENDPOINTS } from "../../public/js/endpoints.js";
-import { callAv } from "./avClient.js";
+import { av } from "./av.js";
 import { printDebugMessage } from "../utils/debug.js";
 import { EXCEPTION_CODES } from "../constants.js";
 import { MY_ORDER } from "../av/objectNames.js";
@@ -34,10 +34,10 @@ export async function handleThreeDS(req, res, { paymentId } = {}) {
   const paRequestUrlField = paymentField(paymentId, PAYMENT_FIELDS.PA_REQUEST_URL);
 
   try {
-    const { data } = await callAv(ORDER_PATH, {
-      get: [paRequestInfoField, paRequestUrlField],
-      objectName: MY_ORDER,
-    });
+    const { data } = await av
+      .on(MY_ORDER)
+      .get(paRequestInfoField, paRequestUrlField)
+      .post(ORDER_PATH);
 
     const paObj = data?.data?.[paRequestInfoField];
     const paJsonStr = paObj?.standard || paObj?.input || paObj?.display || null;
