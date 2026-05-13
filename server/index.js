@@ -9,8 +9,7 @@ import { fileURLToPath } from "url";
 import { env } from "./config/env.js";
 import { securityMiddleware } from "./config/security.js";
 import { loadCredentials } from "./config/https.js";
-import { authHeaders } from "./utils/authHeaders.js";
-import { getApiBase } from "./utils/sessionStore.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 
 import loginRouter from "./routes/login.js";
 import eventsRouter from "./routes/events.js";
@@ -20,6 +19,7 @@ import adyenRouter from "./routes/adyen.js";
 import seatsRouter from "./routes/seats.js";
 import threeDSRouter from "./routes/threeDS.js";
 import customerRouter from "./routes/customer.js";
+import proxyRouter from "./routes/proxy.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,53 +40,9 @@ app.use("/", adyenRouter);
 app.use("/", seatsRouter);
 app.use("/", threeDSRouter);
 app.use("/", customerRouter);
+app.use("/", proxyRouter);
 
-// Generic proxy that auto-injects Session + Cookie.
-// Test-only escape hatch — will be moved to routes/proxy.js in a follow-up commit.
-app.post("/proxy", async (req, res) => {
-  try {
-    const { method = "GET", path: reqPath = "/", headers = {}, body } = req.body || {};
-    const url = /^https?:\/\//i.test(reqPath)
-      ? reqPath
-      : new URL(reqPath, getApiBase() || env.API_BASE).toString();
-
-    const sanitized = { ...headers };
-    delete sanitized.Session;
-    delete sanitized.session;
-    delete sanitized.Cookie;
-    delete sanitized.cookie;
-
-    const out = await fetch(url, {
-      method,
-      headers: { ...authHeaders(), ...sanitized },
-      body: ["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase())
-        ? typeof body === "string"
-          ? body
-          : JSON.stringify(body ?? {})
-        : undefined,
-    });
-
-    const text = await out.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = text;
-    }
-
-    res.status(200).json({
-      request: { url, method, headers: authHeaders(sanitized), body: body ?? null },
-      response: {
-        status: out.status,
-        statusText: out.statusText,
-        headers: Object.fromEntries(out.headers.entries()),
-        data,
-      },
-    });
-  } catch (e) {
-    res.status(500).json({ error: String(e?.message || e) });
-  }
-});
+app.use(errorHandler);
 
 const credentials = await loadCredentials();
 if (credentials) {

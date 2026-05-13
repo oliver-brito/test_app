@@ -5,7 +5,6 @@ import { filterCookieHeader } from "../utils/cookieUtils.js";
 import { isDebugMode } from "../utils/debug.js";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { parseResponse } from "../utils/common.js";
-import { wrapRoute } from "../utils/routeWrapper.js";
 
 const router = express.Router();
 
@@ -27,7 +26,7 @@ router.get("/auth/defaults", (req, res) => {
  * Accepts optional credentials from request body, falls back to .env if not provided.
  * Note: Cannot use makeApiCall since this endpoint establishes the session.
  */
-router.post("/login", wrapRoute(async (req, res) => {
+router.post("/login", express.json(), async (req, res) => {
   if (isDebugMode()) console.log("Starting /login route");
 
   // Accept credentials from request body or fall back to .env
@@ -213,6 +212,6 @@ router.post("/login", wrapRoute(async (req, res) => {
     customerData: customerData,
     backendApiCalls: [apiCallMetadata, userApiCallMetadata, customerApiCallMetadata]
   });
-}));
+});
 
 export default router;
