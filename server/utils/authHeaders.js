@@ -1,9 +1,5 @@
 import { CURRENT_SESSION, CURRENT_COOKIES } from "../utils/sessionStore.js";
 import { filterCookieHeader } from "./cookieUtils.js";
-import dotenv from "dotenv";
-
-// Load .env for default credentials
-dotenv.config();
 
 export function authHeaders(extra = {}) {
   const base = {

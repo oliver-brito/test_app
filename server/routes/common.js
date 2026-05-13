@@ -1,6 +1,7 @@
 import { ENDPOINTS } from '../../public/js/endpoints.js';
 import { sendCall, validateCall, handleSetCookies, makeApiCall, makeApiCallWithErrorHandling } from '../utils/common.js';
 import { printDebugMessage } from '../utils/debug.js';
+import { ACCEPTED_WARNINGS, DEFAULT_CARDHOLDER_NAME, EXCEPTION_CODES } from '../constants.js';
 
 const { ORDER: ORDER_PATH, CUSTOMER: CUSTOMER_PATH } = ENDPOINTS;
 
@@ -13,7 +14,7 @@ export async function insertOrder({ resetPaymentAttempt = false } = {}) {
             {
                 method: "insert",
                 params: insertParams,
-                acceptWarnings: [5008, 4224, 5388]
+                acceptWarnings: ACCEPTED_WARNINGS.INSERT_ORDER
             }
         ],
         objectName: "myOrder",
@@ -67,7 +68,7 @@ export async function handleThreeDS(req, res, { paymentID } = {}) {
       {
         success: false,
         error: '3ds required',
-        code: 4294,
+        code: EXCEPTION_CODES.THREE_DS_REQUIRED,
         paymentID,
         paRequestInfo: paInfo,
         paRequestURL: paURL,
@@ -179,7 +180,7 @@ export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod
         "Order::deliverymethod_id": deliveryMethod,
         [`Payments::${paymentID}::active_payment`]: paymentMethod,
         [`Payments::${paymentID}::swipe_indicator`]: "Internet",
-        [`Payments::${paymentID}::cardholder_name`]: "Oliver Brito"
+        [`Payments::${paymentID}::cardholder_name`]: DEFAULT_CARDHOLDER_NAME
       },
       get: ["Order::order_number", "Payments"],
       objectName: "myOrder"
@@ -202,7 +203,7 @@ export async function executeCheckoutSequence(res, deliveryMethod, paymentMethod
       objectName: "myOrder"
     },
     "Checkout failed (getPaymentClientToken)",
-    { checkGatewayConfig: true }
+    { surfaceThreeDS: true }
   );
   if (!tokenResult) return null;
   if (tokenResult.apiCallMetadata) backendApiCalls.push(tokenResult.apiCallMetadata);

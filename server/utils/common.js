@@ -1,24 +1,10 @@
-import dotenv from "dotenv"; // Ensure .env variables are loaded even if this file is imported before server bootstrap
-import { CURRENT_SESSION, getApiBase } from "../utils/sessionStore.js";
+// .env is loaded by server/config/env.js before this module is imported.
+import { CURRENT_SESSION, getApiBase, getCookies, setCookies } from "../utils/sessionStore.js";
 import { printDebugMessage, logApiCall } from "../utils/debug.js";
 import { authHeaders } from "../utils/authHeaders.js";
 import { parseSetCookieHeader, mergeCookiePairs } from "../utils/cookieUtils.js";
-import { getCookies, setCookies } from "../utils/sessionStore.js";
-import path from "path";
-import { fileURLToPath } from "url";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
-// Resolve project root and load .env once (idempotent if already loaded elsewhere)
-try {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    // Assuming project root is two levels up from this utils directory
-    const envPath = path.resolve(__dirname, "../../.env");
-    dotenv.config({ path: envPath });
-} catch (e) {
-    // Non-fatal; we'll validate API_BASE next
-    printDebugMessage(`dotenv initialization warning: ${e.message}`);
-}
-
+import { classifyException } from "../services/apiErrors.js";
 // Fallback API_BASE from .env (used only if user hasn't logged in with custom API base)
 export const FALLBACK_API_BASE = process.env.API_BASE || "";
 
@@ -106,35 +92,7 @@ export async function handleSetCookies(response) {
     }
 }
 
-// Detect whether a response indicates 3DS (challenge) is required.
-// Logic: original inline implementation checked if JSON string contains the warning code '4294'.
-// This helper safely stringifies objects and falls back gracefully.
-export function is3dsRequired(data) {
-    try {
-        const source = typeof data === 'string' ? data : JSON.stringify(data || '');
-        const codePresent = data?.exception?.number === 4294;
-        if (codePresent) return true;
-        printDebugMessage(`Checking for 3DS requirement in response source: ${source}`);
-        printDebugMessage(`Raw data object: ${JSON.stringify(data)}`);
-        printDebugMessage(`Exception number: ${data?.exception?.number}`);
-        printDebugMessage(`Exception details: ${JSON.stringify(data?.exception)}`);
-        return source.includes('4294');
-    } catch {
-        return false;
-    }
-}
-
-export function isGettingGatewayConfiguration(data) {
-    console.log(`Checking if response indicates getting gateway configuration: ${JSON.stringify(data)}`);
-    try {
-        const source = typeof data === 'string' ? data : JSON.stringify(data || '');
-        const codePresent = data?.exception?.number === 4294;
-        if (codePresent) return true;
-        return source.includes('4294');
-    } catch {
-        return false;
-    }
-}
+// 3DS / cancellation detection lives in services/apiErrors.js (classifyException).
 
 /**
  * Parses response text as JSON, falls back to raw text if parsing fails.
@@ -267,8 +225,7 @@ export function handleApiError(res, response, data, errorMessage, endpoint = 'un
  * @param {string} errorMessage - Error message for failures
  * @param {object} options - Optional settings
  * @param {boolean} options.manual - Manual redirect flag
- * @param {boolean} options.check3ds - Check for 3DS requirement
- * @param {boolean} options.checkGatewayConfig - Check for gateway configuration requirement
+ * @param {boolean} options.surfaceThreeDS - Don't 500 on a 3DS/4294 response; return it for the caller to handle
  * @returns {Promise<{response: Response, data: any, requires3ds?: boolean} | null>}
  */
 export async function makeApiCallWithErrorHandling(
@@ -278,20 +235,14 @@ export async function makeApiCallWithErrorHandling(
     errorMessage,
     options = {}
 ) {
-    const { manual = false, check3ds = false, checkGatewayConfig = false } = options;
+    // Backwards-compatible option names: check3ds / checkGatewayConfig both meant "surface a 4294 result".
+    const { manual = false, surfaceThreeDS = false, check3ds = false, checkGatewayConfig = false } = options;
+    const surface = surfaceThreeDS || check3ds || checkGatewayConfig;
 
     const { response, data, apiCallMetadata } = await makeApiCall(path, payload, manual);
 
     if (!response.ok) {
-        console.log(`checkGatewayConfig: ${checkGatewayConfig}, check3ds: ${check3ds}`);
-        // Check for gateway configuration requirement if enabled
-        if (checkGatewayConfig && isGettingGatewayConfiguration(data)) {
-            printDebugMessage("Getting gateway configuration");
-            return { response, data, apiCallMetadata, isGettingGatewayConfiguration: true };
-
-        }
-        // Check for 3DS requirement if enabled
-        if (check3ds && is3dsRequired(data)) {
+        if (surface && classifyException(data) === "threeDS") {
             printDebugMessage("3DS authentication required");
             return { response, data, apiCallMetadata, requires3ds: true };
         }

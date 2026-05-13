@@ -1,93 +1,76 @@
 // server/routes/threeDS.js
 import express from "express";
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
-import { ENDPOINTS } from "../../public/js/endpoints.js"; // public endpoints constants
-import { makeApiCallWithErrorHandling } from "../utils/common.js"; // shared validation & fetch & cookie wrapper
-import { insertOrder, redirectToViewOrder } from "./common.js"; // order helpers
-import { wrapRouteWithValidation } from "../utils/routeWrapper.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Load environment variables
-dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+import { ENDPOINTS } from "../../public/js/endpoints.js";
+import { makeApiCallWithErrorHandling } from "../utils/common.js";
+import { classifyException } from "../services/apiErrors.js";
+import { validate } from "../middleware/validate.js";
+import { ProcessThreeDSResponseBody } from "../schemas/threeDS.js";
+import { insertOrder, redirectToViewOrder } from "./common.js";
 
 const router = express.Router();
-
 const { ORDER: ORDER_PATH } = ENDPOINTS;
 
-router.post("/processThreeDSResponse", wrapRouteWithValidation(
-    async (req, res) => {
-        const { paymentId, pa_response_information, pa_response_URL } = req.body;
-        const paymentsKeyBase = `Payments::${paymentId}`;
+router.post(
+  "/processThreeDSResponse",
+  express.json(),
+  validate(ProcessThreeDSResponseBody),
+  async (req, res) => {
+  const { paymentId, pa_response_information, pa_response_URL } = req.body;
+  const paymentsKeyBase = `Payments::${paymentId}`;
 
-        /**
-         * Payload to submit 3DS response information.
-         * - pa_response_information: The PARes value returned from the 3DS authentication, encoded.
-         * - pa_response_URL: The URL to redirect the user after 3DS authentication.
-         */
-        const outboundBody = {
-            set: {
-                [`${paymentsKeyBase}::pa_response_information`]: pa_response_information,
-                [`${paymentsKeyBase}::pa_response_URL`]: pa_response_URL
-            },
-            objectName: "myOrder",
-            get: ["Payments"]
-        };
-
-        /**
-         * Submit the 3DS response information to the ORDER endpoint.
-         * This will set the fields and return the updated Payments object.
-         */
-        const result = await makeApiCallWithErrorHandling(
-            res, ORDER_PATH, outboundBody, "Failed to submit 3DS response", { manual: true }
-        );
-        if (!result) return; // Error already handled
-
-        // Collect backend API calls for frontend logging
-        const backendApiCalls = [];
-        if (result.apiCallMetadata) {
-            backendApiCalls.push(result.apiCallMetadata);
-        }
-
-        /**
-         * Finalize the order by calling insertOrder to complete the payment process.
-         * This will insert the order and use the information in pa_response_information
-         * to process the payment.
-         */
-        const { response: actionsResp, data: actionsJson } = await insertOrder();
-
-        if (!actionsResp.ok) {
-            if (actionsJson?.exception?.number === 2018) {
-                return res.json({ success: false, cancelled: true, error: actionsJson?.exception?.message || 'Payment was cancelled' });
-            }
-            return res.status(actionsResp.status).json({
-                status: actionsResp.status,
-                body: actionsJson,
-                backendApiCalls // Include backend API calls
-            });
-        }
-
-        const orderNumber = actionsJson?.data?.["Order::order_number"]?.standard ||
-                           result.data?.data?.["Order::order_number"]?.standard || null;
-        const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-
-        return redirectToViewOrder({
-            orderNumber,
-            transactionId,
-            actionsJson,
-            respJson: result.data,
-            paymentMethod: "3DS Payment",
-            backendApiCalls // Include backend API calls
-        }, res);
+  // Submit the 3DS response (PARes payload + return URL) to av-avon.
+  const outboundBody = {
+    set: {
+      [`${paymentsKeyBase}::pa_response_information`]: pa_response_information,
+      [`${paymentsKeyBase}::pa_response_URL`]: pa_response_URL,
     },
-    {
-        params: ["paymentId", "pa_response_information", "pa_response_URL"],
-        paths: ["ORDER_PATH"],
-        name: "processThreeDSResponse"
+    objectName: "myOrder",
+    get: ["Payments"],
+  };
+
+  const result = await makeApiCallWithErrorHandling(
+    res, ORDER_PATH, outboundBody, "Failed to submit 3DS response", { manual: true }
+  );
+  if (!result) return;
+
+  const backendApiCalls = [];
+  if (result.apiCallMetadata) backendApiCalls.push(result.apiCallMetadata);
+
+  // Finalize the order; insertOrder now sees the PARes payload set above.
+  const { response: actionsResp, data: actionsJson } = await insertOrder();
+
+  if (!actionsResp.ok) {
+    if (classifyException(actionsJson) === "cancelled") {
+      return res.json({
+        success: false,
+        cancelled: true,
+        error: actionsJson?.exception?.message || "Payment was cancelled",
+      });
     }
-));
+    return res.status(actionsResp.status).json({
+      status: actionsResp.status,
+      body: actionsJson,
+      backendApiCalls,
+    });
+  }
+
+  const orderNumber =
+    actionsJson?.data?.["Order::order_number"]?.standard ||
+    result.data?.data?.["Order::order_number"]?.standard ||
+    null;
+  const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+  return redirectToViewOrder(
+    {
+      orderNumber,
+      transactionId,
+      actionsJson,
+      respJson: result.data,
+      paymentMethod: "3DS Payment",
+      backendApiCalls,
+    },
+    res
+  );
+});
 
 export default router;
