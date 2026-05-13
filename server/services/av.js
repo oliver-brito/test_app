@@ -27,6 +27,7 @@ import { mirrorSetCookies } from "./cookieSync.js";
 import { parseResponse } from "./avResponse.js";
 import { classifyException } from "./apiErrors.js";
 import { ApiError } from "../middleware/errorHandler.js";
+import { recordApiCall } from "./requestContext.js";
 
 const EMPTY_STATE = Object.freeze({
   objectName: undefined,
@@ -184,6 +185,10 @@ export async function _execute(path, payload, opts = {}) {
     data,
     durationMs,
   });
+  // Append to the active request's trail (no-op when running outside an
+  // HTTP request — e.g. unit tests).
+  recordApiCall(apiCallMetadata);
+
   const result = { response, data, apiCallMetadata };
 
   if (opts.orFailMessage && !response.ok) {
