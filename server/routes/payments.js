@@ -2,7 +2,7 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { is3dsRequired } from "../utils/common.js";
+import { classifyException } from "../services/apiErrors.js";
 import { insertOrder, redirectToViewOrder, handleThreeDS, executeCheckoutSequence } from "./common.js";
 import { wrapRouteWithValidation } from "../utils/routeWrapper.js";
 
@@ -17,12 +17,8 @@ router.post("/transaction", express.json(), wrapRouteWithValidation(
     const { response, data } = await insertOrder();
 
     if (!response.ok) {
-      /** When the error is 4294, that means that the payment requires a 3DS confirmation
-       * to be fully processed.
-       * This is a common requirement for card payments to prevent fraud.
-       * So, when receiving this error, we should handle it accordingly.
-       */
-      if (is3dsRequired(data)) {
+      // av-avon exception 4294 means the payment requires a 3DS challenge.
+      if (classifyException(data) === "threeDS") {
         printDebugMessage("Transaction requires 3DS authentication");
         return handleThreeDS(req, res, { paymentID: paymentId });
       }

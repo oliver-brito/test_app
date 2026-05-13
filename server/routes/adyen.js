@@ -2,7 +2,9 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { validateCall, makeApiCall, makeApiCallWithErrorHandling, is3dsRequired } from "../utils/common.js";
+import { validateCall, makeApiCall, makeApiCallWithErrorHandling } from "../utils/common.js";
+import { classifyException } from "../services/apiErrors.js";
+import { ACCEPTED_WARNINGS } from "../constants.js";
 import { handleThreeDS, insertOrder, redirectToViewOrder } from "./common.js";
 import { wrapRoute, wrapRouteWithValidation } from "../utils/routeWrapper.js";
 
@@ -31,7 +33,7 @@ router.post("/getPaymentClientConfig", wrapRoute(async (req, res) => {
   }
 
   const payload = {
-    actions: [{ method: "getPaymentClientConfig", params: { payment_method_id: paymentMethodId }, acceptWarnings: [4294] }],
+    actions: [{ method: "getPaymentClientConfig", params: { payment_method_id: paymentMethodId }, acceptWarnings: ACCEPTED_WARNINGS.PAYMENT_CLIENT_CONFIG }],
     objectName: "myPaymentMethod"
   };
 
@@ -125,17 +127,18 @@ router.post("/processAdyenPayment", wrapRouteWithValidation(
     const { response: txResp, data: txData } = await insertOrder({ resetPaymentAttempt: !!resetPaymentAttempt });
 
     if (!txResp.ok) {
-      if (is3dsRequired(txData)) {
-        printDebugMessage('Transaction completion indicates 3DS required (4294)');
+      const exceptionKind = classifyException(txData);
+      if (exceptionKind === "threeDS") {
+        printDebugMessage("Transaction completion indicates 3DS required");
         return handleThreeDS(req, res, { paymentID, transactionData: txData });
       }
-      if (txData?.exception?.number === 2018) {
-        printDebugMessage('Payment cancelled by user (2018)');
+      if (exceptionKind === "cancelled") {
+        printDebugMessage("Payment cancelled by user");
         return res.status(txResp.status).json({
           success: false,
           cancelled: true,
-          error: txData?.exception?.message || 'Payment was cancelled',
-          paymentID
+          error: txData?.exception?.message || "Payment was cancelled",
+          paymentID,
         });
       }
       if (txData?.exception?.message?.toLowerCase().includes('insertunpaid')) {

@@ -4,6 +4,7 @@ import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
 import { makeApiCallWithErrorHandling } from "../utils/common.js";
 import { wrapRouteWithValidation } from "../utils/routeWrapper.js";
+import { ACCEPTED_WARNINGS } from "../constants.js";
 
 const router = express.Router();
 const { ORDER: ORDER_PATH } = ENDPOINTS;
@@ -17,7 +18,7 @@ router.post('/removeSeat', express.json(), wrapRouteWithValidation(
         {
           method: "manageAdmissions",
           params: { removeAdmissionID: [admissionId] },
-          acceptWarnings: [5414]
+          acceptWarnings: ACCEPTED_WARNINGS.REMOVE_ADMISSION
         }
       ],
       get: ["Order", "Admissions", "AvailablePaymentMethods", "DeliveryMethodDetails", "Seats"],
