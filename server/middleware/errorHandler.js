@@ -39,6 +39,7 @@ export function errorHandler(err, req, res, _next) {
   if (err instanceof ApiError) {
     printDebugMessage(`${err.message}: ${err.status}`);
     return res.status(err.status).json({
+      success: false,
       error: err.message,
       message: err.message,
       code: err.code,

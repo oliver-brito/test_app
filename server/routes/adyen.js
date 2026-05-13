@@ -1,5 +1,5 @@
-// server/routes/adyen.js — Adyen-specific payment endpoints. Each route is
-// a thin adapter; the JSON-walking and config-parsing lives in
+// server/routes/adyen.js — Adyen-specific payment endpoints. Each route
+// is a thin handler; JSON-walking and config-parsing live in
 // server/services/adyen/.
 
 import express from "express";
@@ -11,7 +11,8 @@ import { unwrap } from "../services/avResponse.js";
 import { ACCEPTED_WARNINGS } from "../constants.js";
 import { insertOrder, redirectToViewOrder } from "../services/order.js";
 import { handleThreeDS } from "../services/threeDSChallenge.js";
-import { validate } from "../middleware/validate.js";
+import { handler } from "../middleware/handler.js";
+import { ApiError } from "../middleware/errorHandler.js";
 import { ProcessAdyenPaymentBody, PaymentIdBody } from "../schemas/payments.js";
 import { MY_ORDER, MY_PAYMENT_METHOD } from "../av/objectNames.js";
 import { GET_PAYMENT_CLIENT_CONFIG } from "../av/methods.js";
@@ -27,76 +28,64 @@ const newTransactionId = () =>
   `TXN-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
 /**
- * POST /getPaymentClientConfig — returns the Adyen Drop-in client config.
- * Falls back to a static config when unauthenticated or upstream errors,
- * so the UI can render the payment widget even before login.
+ * Returns the Adyen Drop-in client config. Falls back to a static config
+ * when unauthenticated or upstream errors — the UI can render the widget
+ * even before login.
  */
-router.post("/getPaymentClientConfig", express.json(), async (req, res) => {
-  const { paymentMethodId } = req.body || {};
+const getPaymentClientConfig = handler({
+  async run({ paymentMethodId }) {
+    if (!paymentMethodId || !hasActiveSession()) {
+      printDebugMessage("Falling back to static Adyen client config");
+      return ADYEN_FALLBACK_CONFIG;
+    }
 
-  if (!paymentMethodId || !hasActiveSession()) {
-    printDebugMessage("Falling back to static Adyen client config");
-    return res.json(ADYEN_FALLBACK_CONFIG);
-  }
+    const { response, data } = await av
+      .on(MY_PAYMENT_METHOD)
+      .action(
+        GET_PAYMENT_CLIENT_CONFIG,
+        { payment_method_id: paymentMethodId },
+        { acceptWarnings: ACCEPTED_WARNINGS.PAYMENT_CLIENT_CONFIG }
+      )
+      .post(PAYMENTMETHOD_PATH);
 
-  const { response, data } = await av
-    .on(MY_PAYMENT_METHOD)
-    .action(
-      GET_PAYMENT_CLIENT_CONFIG,
-      { payment_method_id: paymentMethodId },
-      { acceptWarnings: ACCEPTED_WARNINGS.PAYMENT_CLIENT_CONFIG }
-    )
-    .post(PAYMENTMETHOD_PATH);
+    if (!response.ok) return { ...ADYEN_FALLBACK_CONFIG, apiError: data };
 
-  if (!response.ok) {
-    return res.json({ ...ADYEN_FALLBACK_CONFIG, apiError: data });
-  }
+    const parsed = parseAdyenClientConfig(data);
+    if (parsed) return parsed;
 
-  const parsed = parseAdyenClientConfig(data);
-  if (parsed) return res.json(parsed);
-
-  printDebugMessage("Unexpected client-config response — using fallback");
-  return res.json({ ...ADYEN_FALLBACK_CONFIG, apiResponse: data, fallback: true });
+    printDebugMessage("Unexpected client-config response — using fallback");
+    return { ...ADYEN_FALLBACK_CONFIG, apiResponse: data, fallback: true };
+  },
 });
 
-/** POST /getPaymentResponse — gateway config (= Adyen paymentMethods) for a payment. */
-router.post("/getPaymentResponse", express.json(), validate(PaymentIdBody), async (req, res) => {
-  const { paymentId } = req.body;
-  const gatewayConfigField = paymentField(paymentId, PAYMENT_FIELDS.PAYMENTMETHOD_GATEWAY_CONFIG);
+/** Gateway config (= Adyen paymentMethods) for a payment record. */
+const getPaymentResponse = handler({
+  body: PaymentIdBody,
+  async run({ paymentId }) {
+    const gatewayConfigField = paymentField(paymentId, PAYMENT_FIELDS.PAYMENTMETHOD_GATEWAY_CONFIG);
 
-  const result = await av
-    .on(MY_ORDER)
-    .get(gatewayConfigField)
-    .post(ORDER_PATH)
-    .orFail("Failed to fetch payment gateway config");
+    const { data } = await av
+      .on(MY_ORDER)
+      .get(gatewayConfigField)
+      .post(ORDER_PATH)
+      .orFail("Failed to fetch payment gateway config");
 
-  const gatewayConfig = unwrap(result.data, gatewayConfigField);
-  if (!gatewayConfig) {
-    return res.status(404).json({
-      error: "Payment gateway config not found",
-      paymentId,
-      rawResponse: result.data,
-    });
-  }
+    const gatewayConfig = unwrap(data, gatewayConfigField);
+    if (!gatewayConfig) {
+      throw new ApiError(404, "Payment gateway config not found", {
+        details: { paymentId, rawResponse: data },
+      });
+    }
 
-  const parsed = parseAdyenGatewayConfig(gatewayConfig);
-  return res.json({
-    success: true,
-    paymentId,
-    gatewayConfig,
-    rawResponse: result.data,
-    ...parsed,
-  });
+    const parsed = parseAdyenGatewayConfig(gatewayConfig);
+    return { success: true, paymentId, gatewayConfig, rawResponse: data, ...parsed };
+  },
 });
 
-/** POST /processAdyenPayment — pushes Adyen's state.data onto the Payment, then completes the order. */
-router.post(
-  "/processAdyenPayment",
-  express.json(),
-  validate(ProcessAdyenPaymentBody),
-  async (req, res) => {
-    const { externalData, paymentId, resetPaymentAttempt } = req.body;
-
+/** Push Adyen's state.data onto the Payment, then complete the order. */
+const processAdyenPayment = handler({
+  body: ProcessAdyenPaymentBody,
+  async run({ externalData, paymentId, resetPaymentAttempt }, { req, res }) {
     await av
       .on(MY_ORDER)
       .set({ [paymentField(paymentId, PAYMENT_FIELDS.EXTERNAL_PAYMENT_DATA)]: externalData })
@@ -110,27 +99,28 @@ router.post(
 
     if (!txResp.ok) {
       const kind = classifyException(txData);
-      if (kind === "threeDS") return handleThreeDS(req, res, { paymentId, transactionData: txData });
+      if (kind === "threeDS") {
+        await handleThreeDS(req, res, { paymentId, transactionData: txData });
+        return; // response already sent
+      }
       if (kind === "cancelled") {
-        return res.status(txResp.status).json({
+        return {
           success: false,
           cancelled: true,
           error: txData?.exception?.message || "Payment was cancelled",
           paymentId,
-        });
+        };
       }
       if (txData?.exception?.message?.toLowerCase().includes("insertunpaid")) {
-        return handleThreeDS(req, res, { paymentId });
+        await handleThreeDS(req, res, { paymentId });
+        return;
       }
-      return res.status(txResp.status).json({
-        success: false,
-        error: "Failed to complete transaction",
+      throw new ApiError(txResp.status, "Failed to complete transaction", {
         details: txData,
-        paymentId,
       });
     }
 
-    return redirectToViewOrder(
+    redirectToViewOrder(
       {
         orderNumber: unwrap(txData, ORDER_NUMBER)?.standard,
         transactionId: newTransactionId(),
@@ -140,35 +130,35 @@ router.post(
       },
       res
     );
-  }
-);
+    return; // response already sent
+  },
+});
 
-/** POST /getPaymentMethodType — surfaces Payments::<id>::paymentmethod_type to the UI. */
-router.post(
-  "/getPaymentMethodType",
-  express.json(),
-  validate(PaymentIdBody),
-  async (req, res) => {
-    const { paymentId } = req.body;
+/** Surfaces Payments::<id>::paymentmethod_type to the UI. */
+const getPaymentMethodType = handler({
+  body: PaymentIdBody,
+  async run({ paymentId }) {
     const typeField = paymentField(paymentId, PAYMENT_FIELDS.PAYMENTMETHOD_TYPE);
 
-    const result = await av
+    const { data } = await av
       .on(MY_ORDER)
       .get(typeField)
       .post(ORDER_PATH)
       .orFail("Failed to fetch payment method type");
 
-    const paymentMethodType = unwrap(result.data, typeField);
+    const paymentMethodType = unwrap(data, typeField);
     if (!paymentMethodType) {
-      return res.status(404).json({
-        error: "Payment method type not found",
-        paymentId,
-        rawResponse: result.data,
+      throw new ApiError(404, "Payment method type not found", {
+        details: { paymentId, rawResponse: data },
       });
     }
+    return { success: true, paymentId, paymentMethodType, rawResponse: data };
+  },
+});
 
-    res.json({ success: true, paymentId, paymentMethodType, rawResponse: result.data });
-  }
-);
+router.post("/getPaymentClientConfig", getPaymentClientConfig);
+router.post("/getPaymentResponse",     getPaymentResponse);
+router.post("/processAdyenPayment",    processAdyenPayment);
+router.post("/getPaymentMethodType",   getPaymentMethodType);
 
 export default router;

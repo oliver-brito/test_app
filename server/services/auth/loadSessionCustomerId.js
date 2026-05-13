@@ -8,6 +8,7 @@
 import { ENDPOINTS } from "../../../public/js/endpoints.js";
 import { parseResponse, unwrap } from "../avResponse.js";
 import { ApiError } from "../../middleware/errorHandler.js";
+import { recordApiCall } from "../requestContext.js";
 import { SESSION_CUSTOMER_ID } from "../../av/fields.js";
 
 const JSON_HEADERS = { Accept: "application/json", "Content-Type": "application/json" };
@@ -43,6 +44,7 @@ export async function loadSessionCustomerId({ apiBase, cookies }) {
     },
     response: data,
   };
+  recordApiCall(apiCallMetadata);
 
   const customerId = unwrap(data, SESSION_CUSTOMER_ID)?.standard?.trim() || "";
   if (!customerId) {

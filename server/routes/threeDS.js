@@ -5,7 +5,8 @@ import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { av } from "../services/av.js";
 import { classifyException } from "../services/apiErrors.js";
 import { unwrap } from "../services/avResponse.js";
-import { validate } from "../middleware/validate.js";
+import { handler } from "../middleware/handler.js";
+import { ApiError } from "../middleware/errorHandler.js";
 import { ProcessThreeDSResponseBody } from "../schemas/threeDS.js";
 import { insertOrder, redirectToViewOrder } from "../services/order.js";
 import { MY_ORDER } from "../av/objectNames.js";
@@ -17,13 +18,9 @@ const { ORDER: ORDER_PATH } = ENDPOINTS;
 const newTransactionId = () =>
   `TXN-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
-router.post(
-  "/processThreeDSResponse",
-  express.json(),
-  validate(ProcessThreeDSResponseBody),
-  async (req, res) => {
-    const { paymentId, pa_response_information, pa_response_URL } = req.body;
-
+const processThreeDSResponse = handler({
+  body: ProcessThreeDSResponseBody,
+  async run({ paymentId, pa_response_information, pa_response_URL }, { res }) {
     // 1. Hand the PaRes back to av-avon.
     const setResponse = await av
       .on(MY_ORDER)
@@ -36,23 +33,19 @@ router.post(
       .post(ORDER_PATH)
       .orFail("Failed to submit 3DS response");
 
-    const backendApiCalls = setResponse.apiCallMetadata ? [setResponse.apiCallMetadata] : [];
-
     // 2. Re-insert the order — av-avon now has the PaRes and can complete the charge.
     const { response: actionsResp, data: actionsJson } = await insertOrder();
 
     if (!actionsResp.ok) {
       if (classifyException(actionsJson) === "cancelled") {
-        return res.json({
+        return {
           success: false,
           cancelled: true,
           error: actionsJson?.exception?.message || "Payment was cancelled",
-        });
+        };
       }
-      return res.status(actionsResp.status).json({
-        status: actionsResp.status,
-        body: actionsJson,
-        backendApiCalls,
+      throw new ApiError(actionsResp.status, "3DS finalization failed", {
+        details: { status: actionsResp.status, body: actionsJson },
       });
     }
 
@@ -61,18 +54,20 @@ router.post(
       unwrap(setResponse.data, ORDER_NUMBER)?.standard ||
       null;
 
-    return redirectToViewOrder(
+    redirectToViewOrder(
       {
         orderNumber,
         transactionId: newTransactionId(),
         actionsJson,
         respJson: setResponse.data,
         paymentMethod: "3DS Payment",
-        backendApiCalls,
       },
       res
     );
-  }
-);
+    return; // response already sent
+  },
+});
+
+router.post("/processThreeDSResponse", processThreeDSResponse);
 
 export default router;

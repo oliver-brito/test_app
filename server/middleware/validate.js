@@ -1,21 +1,18 @@
 import { ApiError } from "./errorHandler.js";
 
 /**
- * Express middleware factory: validates `req.body` against a zod schema.
- * On failure, throws an ApiError(400) with the zod issues attached so the
- * central error handler can render a clean response.
+ * Express middleware factory: validates `req[source]` against a zod
+ * schema. On failure, throws an ApiError(400) with the zod issues
+ * attached so the central error handler can render a clean response.
  *
- * Usage:
- *   import { z } from "zod";
- *   const Body = z.object({ paymentId: z.string() });
- *   router.post("/x", express.json(), validate(Body), handler);
+ * `source` defaults to "body" but can be "query" or "params".
  *
- * The validated body replaces `req.body`, so downstream handlers can trust
- * the shape without re-checking.
+ * The validated value replaces `req[source]`, so downstream handlers
+ * can trust the shape without re-checking.
  */
-export function validate(schema) {
+export function validate(schema, source = "body") {
   return (req, _res, next) => {
-    const result = schema.safeParse(req.body);
+    const result = schema.safeParse(req[source]);
     if (!result.success) {
       return next(
         new ApiError(400, "Invalid request body", {
@@ -24,7 +21,7 @@ export function validate(schema) {
         })
       );
     }
-    req.body = result.data;
+    req[source] = result.data;
     next();
   };
 }

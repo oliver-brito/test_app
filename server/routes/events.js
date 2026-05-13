@@ -6,7 +6,8 @@ import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
 import { av } from "../services/av.js";
 import { unwrap } from "../services/avResponse.js";
-import { validate } from "../middleware/validate.js";
+import { handler } from "../middleware/handler.js";
+import { ApiError } from "../middleware/errorHandler.js";
 import { MapAvailabilityBody } from "../schemas/seats.js";
 import {
   MY_ORDER,
@@ -51,53 +52,40 @@ const router = express.Router();
 const pageMethod = (movePage) =>
   movePage === 1 ? NEXT_PAGE : movePage === -1 ? PREV_PAGE : SEARCH;
 
-router.get("/events/upcoming", async (req, res) => {
-  const movePage = parseInt(req.query.movePage);
-  const objectType = req.query.objectType || "P";
+const listUpcoming = handler({
+  async run({ movePage, objectType = "P" }) {
+    const { data } = await av
+      .on(MY_SEARCH_RESULTS)
+      .action(pageMethod(parseInt(movePage)))
+      .set({
+        [SEARCH_OBJECT_TYPE]: objectType,
+        [SEARCH_QUERY]: "",
+        [SEARCH_FROM]: "",
+        [SEARCH_TO]: "",
+      })
+      .get(SEARCH_TOTAL_RECORDS, SEARCH_CURRENT_PAGE, SEARCH_TOTAL_PAGES, SEARCH_RESULTS)
+      .post(UPCOMING_PATH)
+      .orFail("Upcoming failed");
 
-  const result = await av
-    .on(MY_SEARCH_RESULTS)
-    .action(pageMethod(movePage))
-    .set({
-      [SEARCH_OBJECT_TYPE]: objectType,
-      [SEARCH_QUERY]: "",
-      [SEARCH_FROM]: "",
-      [SEARCH_TO]: "",
-    })
-    .get(SEARCH_TOTAL_RECORDS, SEARCH_CURRENT_PAGE, SEARCH_TOTAL_PAGES, SEARCH_RESULTS)
-    .post(UPCOMING_PATH)
-    .orFail("Upcoming failed");
+    if (data?.errorCode || /error/i.test(data?.message || "")) {
+      throw new ApiError(400, "Upstream error", { details: data });
+    }
 
-  if (result.data?.errorCode || /error/i.test(result.data?.message || "")) {
-    printDebugMessage("Events upcoming soft error");
-    return res.status(400).json({
-      error: "Upstream error",
-      details: result.data,
-      backendApiCalls: result.apiCallMetadata ? [result.apiCallMetadata] : [],
-    });
-  }
-
-  const events = Object.values(unwrap(result.data, SEARCH_RESULTS) || {});
-  printDebugMessage("Events upcoming fetched successfully");
-  res.json({
-    events,
-    rawResponse: result.data,
-    backendApiCalls: result.apiCallMetadata ? [result.apiCallMetadata] : [],
-  });
+    printDebugMessage("Events upcoming fetched successfully");
+    return {
+      events: Object.values(unwrap(data, SEARCH_RESULTS) || {}),
+      rawResponse: data,
+    };
+  },
 });
 
-router.post(
-  "/map/availability/:id",
-  express.json(),
-  validate(MapAvailabilityBody),
-  async (req, res) => {
-    const performanceId = req.params.id;
-    const { priceTypeId, numSeats } = req.body;
-
-    const result = await av
+const mapAvailability = handler({
+  body: MapAvailabilityBody,
+  async run({ id, priceTypeId, numSeats }) {
+    const { data } = await av
       .on(MY_ORDER)
       .action(GET_BEST_AVAILABLE, {
-        perfVector: [performanceId],
+        perfVector: [id],
         reqRows: "1",
         [`reqNum::${priceTypeId}`]: String(numSeats),
         optNum: "2",
@@ -107,58 +95,46 @@ router.post(
       .orFail("getBestAvailable failed");
 
     printDebugMessage("Map availability fetched successfully");
-    res.json({
-      ...result.data,
-      backendApiCalls: result.apiCallMetadata ? [result.apiCallMetadata] : [],
-    });
-  }
-);
-
-router.get("/events/:id", async (req, res) => {
-  const performanceId = req.params.id;
-
-  const result = await av
-    .on(MY_PERFORMANCE)
-    .action(LOAD, { Performance: { performance_id: performanceId } })
-    .get(PERFORMANCE)
-    .post(PERFORMANCE_PATH)
-    .orFail("performance.load failed");
-
-  const perf = unwrap(result.data, PERFORMANCE);
-  if (!perf) {
-    printDebugMessage("Performance not found");
-    return res.status(404).json({
-      error: "Performance not found",
-      details: result.data,
-      backendApiCalls: result.apiCallMetadata ? [result.apiCallMetadata] : [],
-    });
-  }
-
-  printDebugMessage("Performance loaded successfully");
-  res.json({
-    performance: perf,
-    rawResponse: result.data,
-    backendApiCalls: result.apiCallMetadata ? [result.apiCallMetadata] : [],
-  });
+    return data;
+  },
 });
 
-router.post("/map/pricing/:id", async (req, res) => {
-  const performanceId = req.params.id;
+const getEvent = handler({
+  async run({ id }) {
+    const { data } = await av
+      .on(MY_PERFORMANCE)
+      .action(LOAD, { Performance: { performance_id: id } })
+      .get(PERFORMANCE)
+      .post(PERFORMANCE_PATH)
+      .orFail("performance.load failed");
 
-  const result = await av
-    .on(MY_MAP)
-    .action(LOAD_BEST_AVAILABLE, { performance_ids: [performanceId] })
-    .action(LOAD_AVAILABILITY, { performance_ids: [performanceId] })
-    .get(PRICETYPES)
-    .post(MAP_PATH)
-    .orFail("loadMap(pricing) failed");
-
-  printDebugMessage("Map pricing fetched successfully");
-  res.json({
-    pricetypes: unwrap(result.data, PRICETYPES) || {},
-    rawResponse: result.data,
-    backendApiCalls: result.apiCallMetadata ? [result.apiCallMetadata] : [],
-  });
+    const performance = unwrap(data, PERFORMANCE);
+    if (!performance) {
+      throw new ApiError(404, "Performance not found", { details: data });
+    }
+    printDebugMessage("Performance loaded successfully");
+    return { performance, rawResponse: data };
+  },
 });
+
+const mapPricing = handler({
+  async run({ id }) {
+    const { data } = await av
+      .on(MY_MAP)
+      .action(LOAD_BEST_AVAILABLE, { performance_ids: [id] })
+      .action(LOAD_AVAILABILITY,   { performance_ids: [id] })
+      .get(PRICETYPES)
+      .post(MAP_PATH)
+      .orFail("loadMap(pricing) failed");
+
+    printDebugMessage("Map pricing fetched successfully");
+    return { pricetypes: unwrap(data, PRICETYPES) || {}, rawResponse: data };
+  },
+});
+
+router.get( "/events/upcoming",       listUpcoming);
+router.post("/map/availability/:id",  mapAvailability);
+router.get( "/events/:id",            getEvent);
+router.post("/map/pricing/:id",       mapPricing);
 
 export default router;
