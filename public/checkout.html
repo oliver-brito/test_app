@@ -11,7 +11,7 @@
   </script>
 
   <!-- Hosted fields and helper scripts -->
-  <script src="js/hostedFields.js"></script>
+  <script src="js/adyen/hostedFields.js"></script>
 
   <script src="https://checkoutshopper-live.cdn.adyen.com/checkoutshopper/sdk/6.23.0/adyen.js"
       integrity="sha384-fwC67LcglMpjyKzY7kj0vMbD5b9MZAzsxBj4M92eh7d3vtaBa0hKdUHCUVpHeb2K"
@@ -24,11 +24,11 @@
 
   <link rel="stylesheet" href="css/navigation.css">
   <link rel="stylesheet" href="css/checkout.css">
-  <script src="js/errorModal.js"></script>
-  <script src="js/apiDebugConsole.js"></script>
-  <script src="js/apiWrapper.js"></script>
-  <script src="js/authHelper.js"></script>
-  <script src="js/navigation.js"></script>
+  <script src="js/ui/errorModal.js"></script>
+  <script src="js/ui/apiDebugConsole.js"></script>
+  <script src="js/shared/api.js"></script>
+  <script src="js/shared/auth.js"></script>
+  <script src="js/ui/navigation.js"></script>
 </head>
 
 <body>
@@ -67,12 +67,12 @@
   <div id="details-content" style="background:#f3f4f6; padding:16px; border-radius:8px; font-size:14px; max-height:60vh; overflow:auto;"></div>
     </div>
   </div>
-  <script src="js/utils.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/dom.js"></script>
-  <script src="js/adyen.js"></script>
-  <script src="js/checkout.js"></script>
-  <script src="js/submit.js"></script>
+  <script src="js/shared/detailsModal.js"></script>
+  <script src="js/adyen/adyenApi.js"></script>
+  <script src="js/ui/checkoutDom.js"></script>
+  <script src="js/adyen/adyenDropin.js"></script>
+  <script src="js/pages/checkout.js"></script>
+  <script src="js/flows/paymentFlow.js"></script>
   <script>
     (async function() {
       // Check auth and refresh server credentials before proceeding
