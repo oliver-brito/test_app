@@ -1,7 +1,7 @@
 // server/routes/threeDS.js
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
-import { makeApiCallWithErrorHandling } from "../utils/common.js";
+import { callAvManaged } from "../services/avClient.js";
 import { classifyException } from "../services/apiErrors.js";
 import { validate } from "../middleware/validate.js";
 import { ProcessThreeDSResponseBody } from "../schemas/threeDS.js";
@@ -28,7 +28,7 @@ router.post(
     get: ["Payments"],
   };
 
-  const result = await makeApiCallWithErrorHandling(
+  const result = await callAvManaged(
     res, ORDER_PATH, outboundBody, "Failed to submit 3DS response", { manual: true }
   );
   if (!result) return;

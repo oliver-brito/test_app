@@ -2,7 +2,7 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { makeApiCallWithErrorHandling } from "../utils/common.js";
+import { callAvManaged } from "../services/avClient.js";
 import { ACCEPTED_WARNINGS } from "../constants.js";
 import { validate } from "../middleware/validate.js";
 import { RemoveSeatBody } from "../schemas/seats.js";
@@ -25,7 +25,7 @@ router.post("/removeSeat", express.json(), validate(RemoveSeatBody), async (req,
     objectName: "myOrder",
   };
 
-  const result = await makeApiCallWithErrorHandling(
+  const result = await callAvManaged(
     res, ORDER_PATH, payload, "Failed to remove admission"
   );
   if (!result) return;

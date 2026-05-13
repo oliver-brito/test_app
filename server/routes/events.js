@@ -2,7 +2,7 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { makeApiCallWithErrorHandling } from "../utils/common.js";
+import { callAvManaged } from "../services/avClient.js";
 import { validate } from "../middleware/validate.js";
 import { MapAvailabilityBody } from "../schemas/seats.js";
 
@@ -36,7 +36,7 @@ router.get("/events/upcoming", async (req, res) => {
     objectName: "mySearchResults",
   };
 
-  const result = await makeApiCallWithErrorHandling(
+  const result = await callAvManaged(
     res, UPCOMING_PATH, payload, "Upcoming failed"
   );
   if (!result) return;
@@ -80,7 +80,7 @@ router.post("/map/availability/:id", express.json(), validate(MapAvailabilityBod
     objectName: "myOrder",
   };
 
-  const result = await makeApiCallWithErrorHandling(
+  const result = await callAvManaged(
     res, ORDER_PATH, payload, "getBestAvailable failed"
   );
   if (!result) return;
@@ -101,7 +101,7 @@ router.get("/events/:id", async (req, res) => {
     objectName: "myPerformance",
   };
 
-  const result = await makeApiCallWithErrorHandling(
+  const result = await callAvManaged(
     res, PERFORMANCE_PATH, payload, "performance.load failed"
   );
   if (!result) return;
@@ -136,7 +136,7 @@ router.post("/map/pricing/:id", async (req, res) => {
     objectName: "myMap",
   };
 
-  const result = await makeApiCallWithErrorHandling(
+  const result = await callAvManaged(
     res, MAP_PATH, payload, "loadMap(pricing) failed"
   );
   if (!result) return;

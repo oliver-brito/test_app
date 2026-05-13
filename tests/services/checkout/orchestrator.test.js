@@ -2,12 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock the underlying API helper before importing the orchestrator. Vitest
 // hoists vi.mock so the mock is in place when context.js imports it.
-vi.mock("../../../server/utils/common.js", async (importOriginal) => {
+vi.mock("../../../server/services/avClient.js", async (importOriginal) => {
   const actual = await importOriginal();
-  return { ...actual, makeApiCallWithErrorHandling: vi.fn() };
+  return { ...actual, callAvManaged: vi.fn() };
 });
 
-const { makeApiCallWithErrorHandling } = await import("../../../server/utils/common.js");
+const { callAvManaged } = await import("../../../server/services/avClient.js");
 const { runCheckoutSequence } = await import(
   "../../../server/services/checkout/orchestrator.js"
 );
@@ -29,14 +29,14 @@ function mockRes() {
 
 describe("runCheckoutSequence", () => {
   beforeEach(() => {
-    makeApiCallWithErrorHandling.mockReset();
+    callAvManaged.mockReset();
   });
 
   it("calls all 6 steps in order and returns aggregated metadata", async () => {
     // Script the 6 sequential calls. Step 0 returns customer_id; step 2 returns
     // an empty Payments map so step 3 (addPayment) is triggered; step 3 returns
     // a Payments map containing a payment_id; remaining steps return ok.
-    makeApiCallWithErrorHandling
+    callAvManaged
       .mockResolvedValueOnce(
         ok({ data: { "Customer::customer_id": { standard: "CUST-1" } } }, "getCustomerId")
       )
@@ -80,7 +80,7 @@ describe("runCheckoutSequence", () => {
   });
 
   it("skips addPayment when the order already has a Payment record", async () => {
-    makeApiCallWithErrorHandling
+    callAvManaged
       .mockResolvedValueOnce(
         ok({ data: { "Customer::customer_id": { standard: "CUST-1" } } }, "getCustomerId")
       )
@@ -103,7 +103,7 @@ describe("runCheckoutSequence", () => {
     });
 
     expect(result.paymentId).toBe("EXISTING-PAY");
-    expect(makeApiCallWithErrorHandling).toHaveBeenCalledTimes(6);
+    expect(callAvManaged).toHaveBeenCalledTimes(6);
     const callTitles = result.backendApiCalls.map((c) => c.title);
     expect(callTitles).not.toContain("addPayment");
   });
@@ -111,7 +111,7 @@ describe("runCheckoutSequence", () => {
   it("short-circuits to null if a step's upstream call returns null", async () => {
     // First call returns the customer id; second call (addCustomer) "fails"
     // — ctx.call returns null when the upstream helper already sent an error.
-    makeApiCallWithErrorHandling
+    callAvManaged
       .mockResolvedValueOnce(
         ok({ data: { "Customer::customer_id": { standard: "CUST-1" } } }, "getCustomerId")
       )
@@ -125,6 +125,6 @@ describe("runCheckoutSequence", () => {
     });
 
     expect(result).toBeNull();
-    expect(makeApiCallWithErrorHandling).toHaveBeenCalledTimes(2);
+    expect(callAvManaged).toHaveBeenCalledTimes(2);
   });
 });

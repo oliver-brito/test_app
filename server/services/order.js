@@ -1,5 +1,5 @@
 import { ENDPOINTS } from "../../public/js/endpoints.js";
-import { makeApiCall } from "../utils/common.js";
+import { callAv } from "./avClient.js";
 import { ACCEPTED_WARNINGS } from "../constants.js";
 
 const { ORDER: ORDER_PATH } = ENDPOINTS;
@@ -13,7 +13,7 @@ export async function insertOrder({ resetPaymentAttempt = false } = {}) {
   const insertParams = { notification: "correspondence" };
   if (resetPaymentAttempt) insertParams.resetPaymentAttempt = "1";
 
-  return makeApiCall(
+  return callAv(
     ORDER_PATH,
     {
       actions: [
@@ -22,7 +22,7 @@ export async function insertOrder({ resetPaymentAttempt = false } = {}) {
       objectName: "myOrder",
       get: ["Order", "Admissions", "Payments", "Order::order_number"],
     },
-    true
+    { manual: true }
   );
 }
 

@@ -2,7 +2,7 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { validateCall, makeApiCall, makeApiCallWithErrorHandling } from "../utils/common.js";
+import { callAv, callAvManaged, hasActiveSession } from "../services/avClient.js";
 import { classifyException } from "../services/apiErrors.js";
 import { ACCEPTED_WARNINGS } from "../constants.js";
 import { insertOrder, redirectToViewOrder } from "../services/order.js";
@@ -32,9 +32,7 @@ router.post("/getPaymentClientConfig", express.json(), async (req, res) => {
     return res.json(ADYEN_FALLBACK_CONFIG);
   }
 
-  try {
-    validateCall(req, [], ["PAYMENT_METHOD"], "getPaymentClientConfig");
-  } catch {
+  if (!hasActiveSession()) {
     printDebugMessage("No active session, using fallback config");
     return res.json(ADYEN_FALLBACK_CONFIG);
   }
@@ -50,7 +48,7 @@ router.post("/getPaymentClientConfig", express.json(), async (req, res) => {
     objectName: "myPaymentMethod",
   };
 
-  const { response, data } = await makeApiCall(PAYMENTMETHOD_PATH, payload);
+  const { response, data } = await callAv(PAYMENTMETHOD_PATH, payload);
 
   if (!response.ok) {
     printDebugMessage(`Payment client config fetch failed: ${response.status}`);
@@ -94,7 +92,7 @@ router.post("/getPaymentResponse", express.json(), validate(PaymentIdBody), asyn
     objectName: "myOrder",
   };
 
-  const result = await makeApiCallWithErrorHandling(
+  const result = await callAvManaged(
     res, ORDER_PATH, payload, "Failed to fetch payment gateway config"
   );
   if (!result) return;
@@ -152,7 +150,7 @@ router.post("/processAdyenPayment", express.json(), validate(ProcessAdyenPayment
     objectName: "myOrder",
     get: ["Payments"],
   };
-  const setResult = await makeApiCallWithErrorHandling(
+  const setResult = await callAvManaged(
     res, ORDER_PATH, setPayload, "Failed to process Adyen payment"
   );
   if (!setResult) return;
@@ -214,7 +212,7 @@ router.post("/getPaymentMethodType", express.json(), validate(PaymentIdBody), as
     objectName: "myOrder",
   };
 
-  const result = await makeApiCallWithErrorHandling(
+  const result = await callAvManaged(
     res, ORDER_PATH, payload, "Failed to fetch payment method type"
   );
   if (!result) return;
