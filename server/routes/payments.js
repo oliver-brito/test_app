@@ -4,7 +4,9 @@ import { printDebugMessage } from "../utils/debug.js";
 import { classifyException } from "../services/apiErrors.js";
 import { validate } from "../middleware/validate.js";
 import { TransactionBody, CheckoutBody } from "../schemas/payments.js";
-import { insertOrder, redirectToViewOrder, handleThreeDS, executeCheckoutSequence } from "./common.js";
+import { insertOrder, redirectToViewOrder } from "../services/order.js";
+import { handleThreeDS } from "../services/threeDSChallenge.js";
+import { runCheckoutSequence } from "../services/checkout/orchestrator.js";
 
 const router = express.Router();
 
@@ -41,7 +43,7 @@ router.post("/checkout", express.json(), validate(CheckoutBody), async (req, res
   const { deliveryMethod, paymentMethod } = req.body;
 
   const paResponseURL = `${req.protocol}://${req.get("host")}/checkout.html`;
-  const result = await executeCheckoutSequence(res, deliveryMethod, paymentMethod, paResponseURL);
+  const result = await runCheckoutSequence(res, { deliveryMethod, paymentMethod, paResponseURL });
   if (!result) return; // Error already handled
 
   printDebugMessage("Checkout completed successfully");

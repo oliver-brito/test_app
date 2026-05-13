@@ -5,7 +5,8 @@ import { printDebugMessage } from "../utils/debug.js";
 import { validateCall, makeApiCall, makeApiCallWithErrorHandling } from "../utils/common.js";
 import { classifyException } from "../services/apiErrors.js";
 import { ACCEPTED_WARNINGS } from "../constants.js";
-import { handleThreeDS, insertOrder, redirectToViewOrder } from "./common.js";
+import { insertOrder, redirectToViewOrder } from "../services/order.js";
+import { handleThreeDS } from "../services/threeDSChallenge.js";
 import { validate } from "../middleware/validate.js";
 import { ProcessAdyenPaymentBody, PaymentIdBody } from "../schemas/payments.js";
 
