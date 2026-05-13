@@ -12,12 +12,11 @@ const router = express.Router();
 
 router.get("/order", async (req, res) => {
   const result = await callAvManaged(
-    res,
+    
     ORDER_PATH,
     { get: [ORDER, ADMISSIONS], objectName: MY_ORDER },
     "Failed to fetch order details"
   );
-  if (!result) return;
 
   printDebugMessage("Order details fetched successfully");
   res.json({
@@ -30,12 +29,11 @@ router.get("/order", async (req, res) => {
 
 router.get("/details", async (req, res) => {
   const result = await callAvManaged(
-    res,
+    
     ORDER_PATH,
     { get: [PAYMENTS], objectName: MY_ORDER },
     "Failed to fetch payment details"
   );
-  if (!result) return;
 
   printDebugMessage("Payment details fetched successfully");
   res.json({

@@ -2,13 +2,13 @@ import { ENDPOINTS } from "../../../public/js/endpoints.js";
 import { MY_CUSTOMER } from "../../av/objectNames.js";
 import { CUSTOMER_ID } from "../../av/fields.js";
 import { unwrap } from "../avResponse.js";
+import { ApiError } from "../../middleware/errorHandler.js";
 
 const { CUSTOMER: CUSTOMER_PATH } = ENDPOINTS;
 
 /**
  * Read the customer_id off the active session's myCustomer object.
- * Returns the id string, or null if the upstream call failed (response
- * already sent by ctx.call) or no id was present (sends 400 here).
+ * Throws ApiError(400) if the session has no customer attached.
  */
 export async function getCustomerId(ctx) {
   const result = await ctx.call(
@@ -16,12 +16,12 @@ export async function getCustomerId(ctx) {
     { get: [CUSTOMER_ID], objectName: MY_CUSTOMER },
     "Customer not found for user"
   );
-  if (!result) return null;
 
   const customerId = unwrap(result.data, CUSTOMER_ID)?.standard;
   if (!customerId) {
-    ctx.res.status(400).json({ error: "Could not retrieve customer ID from session" });
-    return null;
+    throw new ApiError(400, "Could not retrieve customer ID from session", {
+      backendApiCalls: ctx.apiCalls,
+    });
   }
   return customerId;
 }

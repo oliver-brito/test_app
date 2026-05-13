@@ -67,8 +67,7 @@ router.get("/events/upcoming", async (req, res) => {
     objectName: MY_SEARCH_RESULTS,
   };
 
-  const result = await callAvManaged(res, UPCOMING_PATH, payload, "Upcoming failed");
-  if (!result) return;
+  const result = await callAvManaged(UPCOMING_PATH, payload, "Upcoming failed");
 
   if (result.data?.errorCode || /error/i.test(result.data?.message || "")) {
     printDebugMessage("Events upcoming soft error");
@@ -112,8 +111,7 @@ router.post(
       objectName: MY_ORDER,
     };
 
-    const result = await callAvManaged(res, ORDER_PATH, payload, "getBestAvailable failed");
-    if (!result) return;
+    const result = await callAvManaged(ORDER_PATH, payload, "getBestAvailable failed");
 
     printDebugMessage("Map availability fetched successfully");
     res.json({
@@ -131,8 +129,7 @@ router.get("/events/:id", async (req, res) => {
     objectName: MY_PERFORMANCE,
   };
 
-  const result = await callAvManaged(res, PERFORMANCE_PATH, payload, "performance.load failed");
-  if (!result) return;
+  const result = await callAvManaged(PERFORMANCE_PATH, payload, "performance.load failed");
 
   const perf = unwrap(result.data, PERFORMANCE);
   if (!perf) {
@@ -163,8 +160,7 @@ router.post("/map/pricing/:id", async (req, res) => {
     objectName: MY_MAP,
   };
 
-  const result = await callAvManaged(res, MAP_PATH, payload, "loadMap(pricing) failed");
-  if (!result) return;
+  const result = await callAvManaged(MAP_PATH, payload, "loadMap(pricing) failed");
 
   printDebugMessage("Map pricing fetched successfully");
   res.json({

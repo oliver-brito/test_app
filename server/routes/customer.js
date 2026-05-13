@@ -11,12 +11,11 @@ const { CUSTOMER: CUSTOMER_PATH } = ENDPOINTS;
 
 router.post("/getMyAccountDetails", express.json(), async (req, res) => {
   const result = await callAvManaged(
-    res,
+    
     CUSTOMER_PATH,
     { get: [CUSTOMER, PAYMENTS, CONTACTS, ADDRESSES], objectName: MY_CUSTOMER },
     "Failed to load customer details"
   );
-  if (!result) return;
 
   // av-avon soft-error pattern: 200 status but an errorCode/message in the body.
   if (result.data?.errorCode || /error/i.test(result.data?.message || "")) {

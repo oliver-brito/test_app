@@ -32,8 +32,7 @@ router.post("/removeSeat", express.json(), validate(RemoveSeatBody), async (req,
     objectName: MY_ORDER,
   };
 
-  const result = await callAvManaged(res, ORDER_PATH, payload, "Failed to remove admission");
-  if (!result) return;
+  const result = await callAvManaged(ORDER_PATH, payload, "Failed to remove admission");
 
   printDebugMessage("Seat removal successful");
   res.json({ success: true, response: result.data });
