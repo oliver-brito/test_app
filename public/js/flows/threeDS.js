@@ -46,8 +46,8 @@ export function launch3DSChallenge({ paRequestURL, paRequestInfo, paymentId }) {
         const result = await apiCall("/processThreeDSResponse", {
           body: {
             paymentId,
-            pa_response_information: event.data,
-            pa_response_URL: responseURL,
+            paResponseInformation: event.data,
+            paResponseURL: responseURL,
           },
         });
 

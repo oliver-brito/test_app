@@ -62,20 +62,12 @@ describe("runCheckoutSequence", () => {
     });
 
     expect(result).not.toBeNull();
+    expect(result.success).toBe(true);
     expect(result.paymentId).toBe("PAY-1");
-    expect(result.payment_details).toEqual({ foo: "bar" });
-    expect(result.backendApiCalls).toHaveLength(7);
-
-    const titles = result.backendApiCalls.map((c) => c.title);
-    expect(titles).toEqual([
-      "getCustomerId",
-      "addCustomer",
-      "checkPayments",
-      "addPayment",
-      "setDeliveryAndPayment",
-      "getClientToken",
-      "getPaymentDetails",
-    ]);
+    expect(result.paymentDetails).toEqual({ foo: "bar" });
+    // backendApiCalls is now auto-attached at the HTTP boundary by the
+    // handler factory; the orchestrator doesn't include it in its return.
+    expect(_execute).toHaveBeenCalledTimes(7);
     expect(res.json).not.toHaveBeenCalled();
   });
 
@@ -103,9 +95,9 @@ describe("runCheckoutSequence", () => {
     });
 
     expect(result.paymentId).toBe("EXISTING-PAY");
+    // Six calls: customer-id, addCustomer, checkPayments, setDeliveryAndPayment, getClientToken, getPaymentDetails.
+    // addPayment is skipped because checkPayments already returned a payment_id.
     expect(_execute).toHaveBeenCalledTimes(6);
-    const callTitles = result.backendApiCalls.map((c) => c.title);
-    expect(callTitles).not.toContain("addPayment");
   });
 
   it("propagates the upstream error when a step throws", async () => {
