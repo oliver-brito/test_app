@@ -16,8 +16,7 @@ const returnUrl = urlParams.get("return_url") || "/index.html";
 
 if (sessionExpired) $sessionExpiredInfo.style.display = "block";
 
-// Exposed for the inline onclick handler in login.html.
-function togglePassword() {
+document.querySelector(".password-toggle")?.addEventListener("click", () => {
   const $password = document.getElementById("password");
   const $toggle = document.querySelector(".password-toggle");
   if ($password.type === "password") {
@@ -27,8 +26,7 @@ function togglePassword() {
     $password.type = "password";
     $toggle.textContent = "👁️ Show";
   }
-}
-window.togglePassword = togglePassword;
+});
 
 async function loadDefaultCredentials() {
   try {

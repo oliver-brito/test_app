@@ -1,6 +1,7 @@
-// Hosted-fields payment flow: invoked by the inline onClick="handleSubmit(event)"
-// button rendered in ui/checkoutDom.js. Splits responsibilities across three
-// modules — this file is just the orchestration.
+// Hosted-fields payment flow. The submit handler is wired by
+// ui/checkoutDom.js via form.addEventListener("submit", handleSubmit).
+// Splits responsibilities across three modules — this file is just the
+// orchestration.
 
 import { apiCall } from "../shared/api.js";
 import { setSubmitting, showError, showSuccess, mountProcessButton } from "../ui/submitUI.js";
@@ -24,7 +25,7 @@ export function handleSubmit(event) {
     return;
   }
 
-  const currentPaymentId = window.paymentId || "";
+  const currentPaymentId = getContext().paymentId || "";
 
   try {
     const submissionResult = AvHostedInputSDK.submitGroup();
@@ -90,5 +91,3 @@ async function processTransaction(paymentData, paymentId) {
   }
 }
 
-// Expose for the inline onClick handler rendered in ui/checkoutDom.js.
-window.handleSubmit = handleSubmit;
