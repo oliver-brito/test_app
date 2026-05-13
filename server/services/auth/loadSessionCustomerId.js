@@ -6,8 +6,9 @@
 // we got from authenticate().
 
 import { ENDPOINTS } from "../../../public/js/endpoints.js";
-import { parseResponse } from "../avResponse.js";
+import { parseResponse, unwrap } from "../avResponse.js";
 import { ApiError } from "../../middleware/errorHandler.js";
+import { SESSION_CUSTOMER_ID } from "../../av/fields.js";
 
 const JSON_HEADERS = { Accept: "application/json", "Content-Type": "application/json" };
 
@@ -17,7 +18,7 @@ const JSON_HEADERS = { Accept: "application/json", "Content-Type": "application/
  */
 export async function loadSessionCustomerId({ apiBase, cookies }) {
   const url = new URL(ENDPOINTS.USER, apiBase).toString();
-  const body = { session: { get: ["customer_id"] } };
+  const body = { session: { get: [SESSION_CUSTOMER_ID] } };
 
   const startedAt = Date.now();
   const response = await fetch(url, {
@@ -43,7 +44,7 @@ export async function loadSessionCustomerId({ apiBase, cookies }) {
     response: data,
   };
 
-  const customerId = data?.data?.customer_id?.standard?.trim() || "";
+  const customerId = unwrap(data, SESSION_CUSTOMER_ID)?.standard?.trim() || "";
   if (!customerId) {
     throw new ApiError(400, "Please log in with a user that has a customer assigned to it", {
       endpoint: url,
