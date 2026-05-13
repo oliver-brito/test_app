@@ -6,6 +6,7 @@ import "../ui/navigation.js";
 import { apiCall } from "../shared/api.js";
 import { checkAndRefreshAuth } from "../shared/auth.js";
 import { fallbackImage, avText, avImg } from "../shared/helpers.js";
+import { setContext, getContext } from "../shared/checkoutContext.js";
 
 const $title = document.getElementById("title");
 const $image = document.getElementById("image");
@@ -140,41 +141,23 @@ async function getBestAvailable() {
     $checkout.style.display = "";
     if ($reusePaymentLabel) $reusePaymentLabel.style.display = "flex";
 
-    let $delivery = document.getElementById("delivery");
-    if (!$delivery) {
-      $delivery = document.createElement("select");
-      $delivery.id = "delivery";
-      $delivery.className = "input";
-      $delivery.style.marginLeft = "10px";
-      $checkout.parentNode.insertBefore($delivery, $checkout);
-    }
-    $delivery.innerHTML = "";
-    const delivery = data?.data?.DeliveryMethodDetails || {};
-    Object.entries(delivery).forEach(([id, d]) => {
-      if (id === "state") return;
-      const opt = document.createElement("option");
-      opt.value = id;
-      opt.textContent = d?.name?.display || d?.name?.standard || id;
-      $delivery.appendChild(opt);
-    });
+    const $delivery = document.getElementById("delivery");
+    const $payment = document.getElementById("payment");
 
-    let $payment = document.getElementById("payment");
-    if (!$payment) {
-      $payment = document.createElement("select");
-      $payment.id = "payment";
-      $payment.className = "input";
-      $payment.style.marginLeft = "10px";
-      $delivery.parentNode.insertBefore($payment, $delivery.nextSibling);
+    function populateSelect(select, options) {
+      select.innerHTML = "";
+      Object.entries(options).forEach(([id, opt]) => {
+        if (id === "state") return;
+        const el = document.createElement("option");
+        el.value = id;
+        el.textContent = opt?.name?.display || opt?.name?.standard || id;
+        select.appendChild(el);
+      });
+      select.style.display = "";
     }
-    $payment.innerHTML = "";
-    const payment = data?.data?.AvailablePaymentMethods || {};
-    Object.entries(payment).forEach(([id, p]) => {
-      if (id === "state") return;
-      const opt = document.createElement("option");
-      opt.value = id;
-      opt.textContent = p?.name?.display || p?.name?.standard || id;
-      $payment.appendChild(opt);
-    });
+
+    populateSelect($delivery, data?.data?.DeliveryMethodDetails || {});
+    populateSelect($payment, data?.data?.AvailablePaymentMethods || {});
   } catch (e) {
     console.error(e);
     showError("Couldn't load availability. Please try again.");
@@ -205,10 +188,11 @@ async function populatePriceTypes() {
 
 function handleCheckout(e) {
   e.preventDefault();
+  const ctx = getContext();
   const $delivery = document.getElementById("delivery");
   const $payment = document.getElementById("payment");
-  const deliveryMethod = ($delivery && $delivery.value) || localStorage.getItem("deliveryMethod");
-  const paymentMethod = ($payment && $payment.value) || localStorage.getItem("paymentMethod");
+  const deliveryMethod = $delivery?.value || ctx.deliveryMethod;
+  const paymentMethod = $payment?.value || ctx.paymentMethod;
   if (!deliveryMethod || !paymentMethod) {
     showError("Please select a delivery and payment method.");
     return;
@@ -217,14 +201,12 @@ function handleCheckout(e) {
   const eventName = document.getElementById("title").textContent || "Unknown Event";
   const eventDate = document.getElementById("start").textContent || "TBD";
 
-  localStorage.setItem("deliveryMethod", deliveryMethod);
-  localStorage.setItem("paymentMethod", paymentMethod);
-  localStorage.setItem("eventId", eventId);
-  localStorage.setItem("eventName", eventName);
-  localStorage.setItem("eventDate", eventDate);
+  setContext({ eventId, eventName, eventDate, deliveryMethod, paymentMethod });
 
   const reusePayment = $reusePayment && $reusePayment.checked;
-  window.location.href = reusePayment ? "checkout.html?mode=reusePayment" : "checkout.html";
+  const qs = new URLSearchParams({ eventId });
+  if (reusePayment) qs.set("mode", "reusePayment");
+  window.location.href = `checkout.html?${qs.toString()}`;
 }
 
 $pricetype.addEventListener("change", function () {

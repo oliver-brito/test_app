@@ -4,6 +4,7 @@ import "../ui/errorModal.js";
 import "../ui/apiDebugConsole.js";
 import "../ui/navigation.js";
 import { checkAndRefreshAuth } from "../shared/auth.js";
+import { getContext } from "../shared/checkoutContext.js";
 
 (async function () {
   async function loadOrderDetails() {
@@ -48,9 +49,7 @@ import { checkAndRefreshAuth } from "../shared/auth.js";
       }
 
       const orderData = orderResponse.order;
-      const eventName = localStorage.getItem('eventName') || 'Event';
-      const eventDate = localStorage.getItem('eventDate') || 'TBD';
-      const deliveryMethod = localStorage.getItem('deliveryMethod') || 'Email';
+      const { eventName = "Event", eventDate = "TBD", deliveryMethod = "Email" } = getContext();
 
       // Helper function to check if a field has a meaningful value
       const hasValue = (field) => {
