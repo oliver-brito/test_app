@@ -1,49 +1,48 @@
-// server/routes/customer.js
+// server/routes/customer.js — customer-facing endpoints (account page).
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
 import { callAvManaged } from "../services/avClient.js";
+import { MY_CUSTOMER } from "../av/objectNames.js";
+import { CUSTOMER, PAYMENTS, CONTACTS, ADDRESSES } from "../av/fields.js";
 
 const router = express.Router();
 const { CUSTOMER: CUSTOMER_PATH } = ENDPOINTS;
 
 router.post("/getMyAccountDetails", express.json(), async (req, res) => {
-  const customerPayload = {
-    get: ["Customer", "Payments", "Contacts", "Addresses"],
-    objectName: "myCustomer",
-  };
-  const customerResult = await callAvManaged(
-    res, CUSTOMER_PATH, customerPayload, "Failed to load customer details"
+  const result = await callAvManaged(
+    res,
+    CUSTOMER_PATH,
+    { get: [CUSTOMER, PAYMENTS, CONTACTS, ADDRESSES], objectName: MY_CUSTOMER },
+    "Failed to load customer details"
   );
-  if (!customerResult) return;
+  if (!result) return;
 
-  // Soft error (errorCode / message contains "error") — surface as 400 / 401.
-  if (customerResult.data?.errorCode || /error/i.test(customerResult.data?.message || "")) {
+  // av-avon soft-error pattern: 200 status but an errorCode/message in the body.
+  if (result.data?.errorCode || /error/i.test(result.data?.message || "")) {
     printDebugMessage("Customer details soft error detected");
-    const statusCode =
-      customerResult.data?.errorCode === "99" || customerResult.data?.errorCode === 99 ? 401 : 400;
-    return res.status(statusCode).json({
+    const isAuthError = result.data?.errorCode === "99" || result.data?.errorCode === 99;
+    return res.status(isAuthError ? 401 : 400).json({
       error: "Upstream error",
-      details: customerResult.data,
-      backendApiCalls: customerResult.apiCallMetadata ? [customerResult.apiCallMetadata] : [],
+      details: result.data,
+      backendApiCalls: result.apiCallMetadata ? [result.apiCallMetadata] : [],
     });
   }
 
   printDebugMessage("Customer details retrieval successful");
   res.json({
     success: true,
-    response: customerResult.data,
-    backendApiCalls: [customerResult.apiCallMetadata],
+    response: result.data,
+    backendApiCalls: [result.apiCallMetadata],
   });
 });
 
+// Placeholders — wired up to the UI but not implemented against av-avon yet.
 router.post("/addNewPaymentMethod", express.json(), async (req, res) => {
-  // TODO: not yet implemented
   res.status(501).json({ error: "Not implemented" });
 });
 
 router.post("/getSaveablePaymentMethods", express.json(), async (req, res) => {
-  // TODO: not yet implemented
   res.status(501).json({ error: "Not implemented" });
 });
 
