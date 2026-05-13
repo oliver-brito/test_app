@@ -13,6 +13,7 @@ import {
   ADMISSIONS,
   AVAILABLE_PAYMENT_METHODS,
   DELIVERY_METHOD_DETAILS,
+  SEATS,
 } from "../av/fields.js";
 
 const router = express.Router();
@@ -28,7 +29,7 @@ router.post("/removeSeat", express.json(), validate(RemoveSeatBody), async (req,
         acceptWarnings: ACCEPTED_WARNINGS.REMOVE_ADMISSION,
       },
     ],
-    get: [ORDER, ADMISSIONS, AVAILABLE_PAYMENT_METHODS, DELIVERY_METHOD_DETAILS, "Seats"],
+    get: [ORDER, ADMISSIONS, AVAILABLE_PAYMENT_METHODS, DELIVERY_METHOD_DETAILS, SEATS],
     objectName: MY_ORDER,
   };
 

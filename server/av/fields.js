@@ -18,11 +18,16 @@ export const PRICETYPES = "pricetypes";
 export const AVAILABLE_PAYMENT_METHODS = "AvailablePaymentMethods";
 export const DELIVERY_METHOD_DETAILS = "DeliveryMethodDetails";
 export const SEARCH_RESULTS = "SearchResults";
+export const SEATS = "Seats";
 
 // Scoped fields
 export const ORDER_NUMBER = "Order::order_number";
 export const ORDER_DELIVERY_METHOD_ID = "Order::deliverymethod_id";
 export const CUSTOMER_ID = "Customer::customer_id";
+
+// Session-scoped fields — returned under `session.get` on /login's /user
+// call, distinct from the customer object's own scoped fields above.
+export const SESSION_CUSTOMER_ID = "customer_id";
 
 // Search criteria
 export const SEARCH_OBJECT_TYPE = "SearchCriteria::object_type_filter";
