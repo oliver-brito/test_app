@@ -1,3 +1,6 @@
+// zod schema for the /processThreeDSResponse route (PaRes from the Cardinal
+// challenge iframe).
+
 import { z } from "zod";
 
 export const ProcessThreeDSResponseBody = z.object({

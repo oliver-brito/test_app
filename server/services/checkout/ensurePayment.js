@@ -1,3 +1,6 @@
+// Checkout step 3: make sure the order has a Payment record, then return
+// its payment_id (the handle used by every subsequent step).
+
 import { ENDPOINTS } from "../../../public/js/endpoints.js";
 import { MY_ORDER } from "../../av/objectNames.js";
 import { ADD_PAYMENT } from "../../av/methods.js";

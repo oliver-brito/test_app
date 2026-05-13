@@ -1,3 +1,5 @@
+// Checkout step 1: read the customer_id off the active session.
+
 import { ENDPOINTS } from "../../../public/js/endpoints.js";
 import { MY_CUSTOMER } from "../../av/objectNames.js";
 import { CUSTOMER_ID } from "../../av/fields.js";

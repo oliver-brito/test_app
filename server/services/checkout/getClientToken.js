@@ -1,3 +1,7 @@
+// Checkout step 5: fetch the gateway client token (av-avon will internally
+// initiate 3DS here when required — we mark surfaceThreeDS so the
+// orchestrator continues instead of bailing with a 500).
+
 import { ENDPOINTS } from "../../../public/js/endpoints.js";
 import { MY_ORDER } from "../../av/objectNames.js";
 import { GET_PAYMENT_CLIENT_TOKEN } from "../../av/methods.js";
