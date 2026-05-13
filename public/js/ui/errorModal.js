@@ -1,8 +1,10 @@
-// Error Modal System with collapsible request/response sections
-// This module provides a global error modal that displays API call failures
-// with prettified, collapsible JSON for both request and response
+// Error Modal — registers window.showApiError / window.clearErrorIndicator
+// and auto-mounts a singleton modal on DOM ready. Imported as a side-effect
+// module from page entries.
 
-(function() {
+export const _errorModalLoaded = true;
+
+(function () {
   // Store the last error data so we can reopen the modal
   let lastErrorData = null;
 

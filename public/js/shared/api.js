@@ -1,18 +1,12 @@
-// API Wrapper with automatic error modal display
-// This module wraps fetch calls to automatically show the error modal when API calls fail
+// API Wrapper — exports apiCall + fetchWithErrorHandling. Pages should
+// `import "../ui/errorModal.js"` first so window.showApiError is available.
 
-(function() {
-  // Store original fetch
-  const originalFetch = window.fetch;
+const originalFetch = window.fetch;
 
-  /**
-   * Enhanced fetch wrapper that automatically shows error modal on failures
-   * @param {string} url - The URL to fetch
-   * @param {object} options - Fetch options
-   * @param {boolean} showErrorModal - Whether to show error modal on failure (default: true)
-   * @returns {Promise<Response>}
-   */
-  window.fetchWithErrorHandling = async function(url, options = {}, showErrorModal = true) {
+/**
+ * Enhanced fetch wrapper that automatically shows the error modal on failures.
+ */
+export async function fetchWithErrorHandling(url, options = {}, showErrorModal = true) {
     // Ensure error modal is available
     if (showErrorModal && typeof window.showApiError !== 'function') {
       console.warn('showApiError not available, error modal may not display');
@@ -132,18 +126,12 @@
       }
       throw error;
     }
-  };
+}
 
-  /**
-   * Helper to make API calls with automatic error handling
-   * @param {string} endpoint - The endpoint path (e.g., '/login', '/events')
-   * @param {object} options - Additional options
-   * @param {object} options.body - Request body (will be JSON.stringify'd)
-   * @param {string} options.method - HTTP method (default: POST)
-   * @param {boolean} options.showErrorModal - Show error modal on failure (default: true)
-   * @returns {Promise<any>} - Parsed JSON response
-   */
-  window.apiCall = async function(endpoint, options = {}) {
+/**
+ * Make a JSON API call with automatic error-modal + debug-console logging.
+ */
+export async function apiCall(endpoint, options = {}) {
     const {
       body = null,
       method = 'POST',
@@ -173,7 +161,7 @@
     };
 
     try {
-      const response = await window.fetchWithErrorHandling(endpoint, fetchConfig, showErrorModal);
+      const response = await fetchWithErrorHandling(endpoint, fetchConfig, showErrorModal);
 
       // Clone response to read it without consuming
       const clonedResponse = response.clone();
@@ -216,31 +204,12 @@
 
       return responseData;
     } catch (error) {
-      // Network errors don't have backend API calls, so we skip logging
       throw error;
     }
-  };
+}
 
-  // Backward compatible: replace global fetch with error-handling version
-  // (optional - can be enabled by calling enableGlobalFetchWrapper())
-  window.enableGlobalFetchWrapper = function() {
-    window.fetch = window.fetchWithErrorHandling;
-    console.log('Global fetch wrapper enabled - all fetch calls will now show error modals');
-  };
+// Window aliases for code that still references the globals (legacy + the
+// inline checkout.html bootstrap script).
+window.apiCall = apiCall;
+window.fetchWithErrorHandling = fetchWithErrorHandling;
 
-  // Ensure window.apiCall exists even if there's an error
-  if (typeof window.apiCall !== 'function') {
-    console.error('Failed to initialize apiCall - using fallback');
-    window.apiCall = async function(endpoint, options = {}) {
-      const response = await fetch(endpoint, {
-        method: options.method || 'POST',
-        headers: { 'Content-Type': 'application/json', ...options.headers },
-        body: options.body ? JSON.stringify(options.body) : undefined
-      });
-      return response.json();
-    };
-  }
-
-  // Log that the wrapper is loaded
-  console.log('✅ API Wrapper loaded. Use apiCall() or fetchWithErrorHandling() for automatic error handling.');
-})();

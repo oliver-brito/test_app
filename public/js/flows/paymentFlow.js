@@ -1,183 +1,92 @@
-function handleSubmit(event) {
-  // Prevent default form submission and run our hosted-fields flow instead
+// Hosted-fields payment flow: invoked by the inline onClick="handleSubmit(event)"
+// button rendered in ui/checkoutDom.js. Splits responsibilities across three
+// modules — this file is just the orchestration.
+
+import { apiCall } from "../shared/api.js";
+import { setSubmitting, showError, showSuccess, mountProcessButton } from "../ui/submitUI.js";
+import { launch3DSChallenge } from "./threeDS.js";
+
+/**
+ * Submit the hosted-fields group via the Av SDK, then mount a "process
+ * transaction" button that POSTs the result to /transaction.
+ */
+export function handleSubmit(event) {
   event.preventDefault();
+  setSubmitting(true);
 
-  // UI elements
-  const submitButton = document.getElementById('submit-button');
-  const resultDiv = document.getElementById('result');
-
-  // Disable submit button immediately to avoid duplicate submissions
-  if (submitButton) {
-    submitButton.disabled = true;
-    submitButton.textContent = 'Processing...';
+  if (typeof AvHostedInputSDK === "undefined") {
+    showError("Payment system not loaded. Please refresh the page and try again.");
+    return;
   }
-
-  // Guard: ensure AvHostedInputSDK is present and has the submission method
-  if (typeof AvHostedInputSDK === 'undefined') {
-    showError('Payment system not loaded. Please refresh the page and try again.');
+  if (typeof AvHostedInputSDK.submitGroup !== "function") {
+    showError("Payment submission method not available. Please refresh the page.");
     return;
   }
 
-  if (typeof AvHostedInputSDK.submitGroup !== 'function') {
-    showError('Payment submission method not available. Please refresh the page.');
-    return;
-  }
+  const currentPaymentId = window.paymentID || "";
 
-  // Try to submit the hosted fields group. The SDK may return a Promise or a sync value.
   try {
-    const currentPaymentID = window.paymentID || '';
     const submissionResult = AvHostedInputSDK.submitGroup();
 
-    // Render a button which, when clicked, will call our server transaction endpoint
-    function showProcessButton(paymentData, pid) {
-      // Remove any previous manual-process button to avoid duplicates
-      const previous = document.getElementById('manual-process-btn');
-      if (previous) previous.remove();
-
-      const container = document.getElementById('result');
-      const button = document.createElement('button');
-      button.id = 'manual-process-btn';
-      button.className = 'btn';
-      button.textContent = 'Continue to Process Transaction';
-      button.style.marginTop = '20px';
-
-      button.onclick = async function() {
-        button.disabled = true;
-        button.textContent = 'Processing...';
-        await processTransaction(paymentData, pid);
-      };
-
-      container.appendChild(button);
-    }
-
-    // Handle both Promise-returning and synchronous SDK results
-    if (submissionResult && typeof submissionResult.then === 'function') {
-      submissionResult.then((paymentData) => {
-        showProcessButton(paymentData, currentPaymentID);
-      }).catch((err) => {
-        showError(`Payment submission failed: ${err && err.message ? err.message : String(err)}`);
-      });
+    if (submissionResult && typeof submissionResult.then === "function") {
+      submissionResult
+        .then((paymentData) =>
+          mountProcessButton(() => processTransaction(paymentData, currentPaymentId))
+        )
+        .catch((err) =>
+          showError(`Payment submission failed: ${err?.message || String(err)}`)
+        );
     } else {
-      // Synchronous return path
-      showProcessButton(submissionResult, currentPaymentID);
+      mountProcessButton(() => processTransaction(submissionResult, currentPaymentId));
     }
   } catch (err) {
-    showError(`Payment submission error: ${err && err.message ? err.message : String(err)}`);
-  }
-
-  // Sends the assembled paymentData to the server's /transaction endpoint
-  async function processTransaction(paymentData, pid) {
-    try {
-      const payload = {
-        paymentData: paymentData,
-        paymentId: pid,
-        orderData: {
-          eventId: localStorage.getItem('eventId'),
-          deliveryMethod: localStorage.getItem('deliveryMethod'),
-          paymentMethod: localStorage.getItem('paymentMethod'),
-          eventName: localStorage.getItem('eventName'),
-          eventDate: localStorage.getItem('eventDate')
-        }
-      };
-
-      // Use the new API wrapper for automatic error modal display
-      const result = await window.apiCall('/transaction', {
-        body: payload
-      });
-
-      // 3DS required: initiate Cardinal Cruise Collect via hidden iframe and form POST
-        if (result.error === "3ds required" && result.paRequestInfo && result.paRequestURL) {
-          console.log("📌 3DS required detected:", result);
-
-          const paRequestURL = result.paRequestURL.standard || result.paRequestURL;
-          const jwt = result.paRequestInfo.body.JWT || result.paRequestInfo.body?.JWT || result.paRequestInfo.body; // fallback if structure differs
-
-          // Early raw listener to observe ALL postMessages (no once:true so we don't miss final message)
-          window.addEventListener('message', async (e) => {
-             // Send a single JSON POST and await the response so we don't duplicate requests
-            var payload = {
-              paymentId: pid,
-              pa_response_information: e.data,
-              pa_response_URL: window.location.href || (window.location.origin + '/checkout.html')
-            };
-            try {
-              // Use the new API wrapper for automatic error modal display
-              const result = await window.apiCall("/processThreeDSResponse", {
-                body: payload
-              });
-
-              if (result && result.success && result.redirectUrl) {
-                setTimeout(() => { window.location.href = result.redirectUrl; }, 1500);
-              } else {
-                const errMsg = (result && result.error) ? result.error : (typeof result === 'string' ? result : 'Transaction failed');
-                throw new Error(errMsg);
-              }
-            } catch (e) {
-              console.error("❌ Error sending PaRes (JSON):", e);
-            }
-          });
-
-          // Single hidden iframe (no nested iframe) for Cruise Collect form POST
-          const iframe = document.createElement('iframe');
-          iframe.style.width = '0';
-          iframe.style.height = '0';
-          iframe.style.border = '0';
-          iframe.id = 'cardinal-iframe';
-          iframe.name = 'cardinalFrame';
-          document.body.appendChild(iframe);
-
-          const html = `
-            <html>
-              <body onload="document.forms[0].submit()">
-                <form action="${paRequestURL}" method="POST" target="_self">
-                  <input type="hidden" name="JWT" value="${jwt}" />
-                </form>
-              </body>
-            </html>
-          `;
-
-          iframe.contentDocument.open();
-          iframe.contentDocument.write(html);
-          iframe.contentDocument.close();
-      }
-      if (result.success && result.redirectUrl) {
-        showSuccess('Payment processed successfully! Redirecting to confirmation...');
-        setTimeout(() => { window.location.href = result.redirectUrl; }, 1500);
-      } else {
-        throw new Error(result.error || 'Transaction failed');
-      }
-    } catch (error) {
-      showError(`Transaction failed: ${error && error.message ? error.message : String(error)}`);
-    }
-  }
-
-  // Display an error message in the result area and re-enable submit button
-  function showError(message) {
-    if (submitButton) {
-      submitButton.disabled = false;
-      submitButton.textContent = 'Submit Payment';
-    }
-
-    // Remove any previous error messages
-    const existingErrors = resultDiv.querySelectorAll('.payment-error');
-    existingErrors.forEach(el => el.remove());
-
-    const errorNode = document.createElement('div');
-    errorNode.className = 'error payment-error';
-    errorNode.style.marginTop = '16px';
-    errorNode.textContent = message;
-    resultDiv.appendChild(errorNode);
-  }
-
-  // Display a transient success message
-  function showSuccess(message) {
-    const existing = resultDiv.querySelectorAll('.payment-error, .payment-success');
-    existing.forEach(el => el.remove());
-
-    const successNode = document.createElement('div');
-    successNode.className = 'success payment-success';
-    successNode.style.marginTop = '16px';
-    successNode.textContent = message;
-    resultDiv.appendChild(successNode);
+    showError(`Payment submission error: ${err?.message || String(err)}`);
   }
 }
+
+async function processTransaction(paymentData, paymentId) {
+  try {
+    const payload = {
+      paymentData,
+      paymentId,
+      orderData: {
+        eventId: localStorage.getItem("eventId"),
+        deliveryMethod: localStorage.getItem("deliveryMethod"),
+        paymentMethod: localStorage.getItem("paymentMethod"),
+        eventName: localStorage.getItem("eventName"),
+        eventDate: localStorage.getItem("eventDate"),
+      },
+    };
+
+    const result = await apiCall("/transaction", { body: payload });
+
+    if (result.error === "3ds required" && result.paRequestInfo && result.paRequestURL) {
+      const threeDSResult = await launch3DSChallenge({
+        paRequestURL: result.paRequestURL,
+        paRequestInfo: result.paRequestInfo,
+        paymentId,
+      });
+      if (threeDSResult?.redirectUrl) {
+        setTimeout(() => {
+          window.location.href = threeDSResult.redirectUrl;
+        }, 1500);
+      }
+      return;
+    }
+
+    if (result.success && result.redirectUrl) {
+      showSuccess("Payment processed successfully! Redirecting to confirmation...");
+      setTimeout(() => {
+        window.location.href = result.redirectUrl;
+      }, 1500);
+      return;
+    }
+
+    throw new Error(result.error || "Transaction failed");
+  } catch (error) {
+    showError(`Transaction failed: ${error?.message || String(error)}`);
+  }
+}
+
+// Expose for the inline onClick handler rendered in ui/checkoutDom.js.
+window.handleSubmit = handleSubmit;

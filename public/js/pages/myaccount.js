@@ -1,9 +1,13 @@
-// public/js/myaccount.js
-// Handles fetching and displaying customer account information
+// My Account page entry.
 
-(async function() {
-  // Check auth and refresh server credentials before proceeding
-  if (!(await window.checkAndRefreshAuth())) {
+import "../ui/errorModal.js";
+import "../ui/apiDebugConsole.js";
+import "../ui/navigation.js";
+import { apiCall } from "../shared/api.js";
+import { checkAndRefreshAuth } from "../shared/auth.js";
+
+(async function () {
+  if (!(await checkAndRefreshAuth())) {
     return; // Will redirect to login
   }
 

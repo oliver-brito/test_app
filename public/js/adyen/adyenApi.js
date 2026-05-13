@@ -1,118 +1,115 @@
-// API helpers for checkout (exposed on window)
+// Adyen-specific API helpers used by the checkout flow.
 
-window.fetchCheckoutData = async function({ eventId, deliveryMethod, paymentMethod }) {
-  // Use the new API wrapper for automatic error modal display
-  return await window.apiCall('/checkout', {
-    body: { eventId, deliveryMethod, paymentMethod }
+import { apiCall } from "../shared/api.js";
+
+export async function fetchCheckoutData({ eventId, deliveryMethod, paymentMethod }) {
+  return apiCall("/checkout", {
+    body: { eventId, deliveryMethod, paymentMethod },
   });
-};
+}
 
-window.determineAdyenFlag = async function(paymentID) {
-  if (!paymentID) return false;
+export async function determineAdyenFlag(paymentID) {
+  if (!paymentID) {
+    window.adyen = false;
+    return false;
+  }
   try {
-    const paymentTypeData = await window.apiCall('/getPaymentMethodType', {
-      body: { paymentID: paymentID }
+    const paymentTypeData = await apiCall("/getPaymentMethodType", {
+      body: { paymentID },
     });
     if (paymentTypeData.success && paymentTypeData.paymentMethodType) {
-      const paymentMethodType = paymentTypeData.paymentMethodType;
-      const containsAdyen = Object.values(paymentMethodType).some(value => typeof value === 'string' && value.toLowerCase().includes('adyen'));
+      const containsAdyen = Object.values(paymentTypeData.paymentMethodType).some(
+        (value) => typeof value === "string" && value.toLowerCase().includes("adyen")
+      );
       window.adyen = containsAdyen;
-    // Payment method type checked
       return containsAdyen;
     }
   } catch (error) {
-    console.warn('Error checking payment method type:', error, 'defaulting adyen to false');
+    console.warn("Error checking payment method type:", error, "defaulting adyen to false");
   }
   window.adyen = false;
   return false;
-};
+}
 
-// call to getPaymentClientConfig
-window.getPaymentConfiguration = async function() {
-  try {
-    const paymentMethodId = localStorage.getItem('paymentMethod') || '';
-    const eventId = localStorage.getItem('eventId') || '';
-    const serverConfig = await window.apiCall('/getPaymentClientConfig', {
-      body: { paymentMethodId: paymentMethodId, eventId: eventId, paymentID: window.paymentID }
-    });
-  // Server payment config fetched
-    return {
-      environment: serverConfig.environment,
-      clientKey: serverConfig.clientKey,
-      countryCode: serverConfig.countryCode,
-      currency: serverConfig.currency
-    };
-  } catch (error) {
-    console.error('Failed to fetch payment client configuration from server:', error);
-    throw error;
-  }
-};
+export async function getPaymentConfiguration() {
+  const paymentMethodId = localStorage.getItem("paymentMethod") || "";
+  const eventId = localStorage.getItem("eventId") || "";
+  const serverConfig = await apiCall("/getPaymentClientConfig", {
+    body: { paymentMethodId, eventId, paymentID: window.paymentID },
+  });
+  return {
+    environment: serverConfig.environment,
+    clientKey: serverConfig.clientKey,
+    countryCode: serverConfig.countryCode,
+    currency: serverConfig.currency,
+  };
+}
 
-// call to /order with get [ Payments::payment_id::payment_method_gateway_configuration ]
-window.getPaymentResponse = async function() {
+export async function getPaymentResponse() {
   try {
-    const paymentResponse = await window.apiCall('/getPaymentResponse', {
-      body: { paymentID: window.paymentID }
+    return await apiCall("/getPaymentResponse", {
+      body: { paymentID: window.paymentID },
     });
-  // Payment response fetched
-    return paymentResponse;
   } catch (error) {
-    console.warn('Failed to fetch payment response from server:', error);
+    console.warn("Failed to fetch payment response from server:", error);
     return null;
   }
-};
+}
 
-
-// This function will set the external_payment_data field and process the payment
-// however, if the server returns the 4294 error code, it indicates that further action is needed (e.g., 3DS2 authentication).
-// so it will call the dropin.handleAction method with the action data from the server response, stored in the pa_request_info field.
-window.handleAdyenSubmit = async function(state, dropin) {
-  // Adyen Drop-in onSubmit invoked
+/**
+ * Adyen Drop-in onSubmit / onAdditionalDetails handler. Calls
+ * /processAdyenPayment; on a 4294 (3DS required) response, forwards the
+ * action payload back to the Drop-in so it can launch the challenge.
+ */
+export async function handleAdyenSubmit(state, dropin) {
   try {
-    // Use the new API wrapper for automatic error modal display
-    const resetEnabled = localStorage.getItem('resetPaymentAttemptEnabled') === 'true';
-    const result = await window.apiCall('/processAdyenPayment', {
+    const resetEnabled = localStorage.getItem("resetPaymentAttemptEnabled") === "true";
+    const result = await apiCall("/processAdyenPayment", {
       body: {
         externalData: JSON.stringify(state.data),
         paymentID: window.paymentID,
-        ...(resetEnabled ? { resetPaymentAttempt: true } : {})
+        ...(resetEnabled ? { resetPaymentAttempt: true } : {}),
       },
-      showErrorModal: false
+      showErrorModal: false,
     });
-  // Payment processing result received
+
     if (result.success && result.redirectUrl) {
       window.location.href = result.redirectUrl;
     } else if (result.paRequestInfo) {
-      if (typeof dropin.handleAction === 'function') {
-        /*
-          Will either
-            - trigger 3DS2 flow within the Drop-in if Native 3DS2 data is provided
-            - redirect to 3DS1 challenge if paRequestInfo contains a redirect URL
-         */
-        dropin.handleAction(result.paRequestInfo); // Pass action data to Drop-in for further handling
+      if (typeof dropin.handleAction === "function") {
+        dropin.handleAction(result.paRequestInfo);
       } else {
-        console.warn('dropin.handleAction not available');
+        console.warn("dropin.handleAction not available");
       }
     } else if (result.cancelled) {
-      dropin.setStatus('error', { message: result.error || 'Payment was cancelled.' });
-      const eventId = localStorage.getItem('eventId');
+      dropin.setStatus("error", { message: result.error || "Payment was cancelled." });
+      const eventId = localStorage.getItem("eventId");
       if (eventId) {
-        setTimeout(() => { window.location.href = `event.html?id=${encodeURIComponent(eventId)}&cancelled=true`; }, 1000);
+        setTimeout(() => {
+          window.location.href = `event.html?id=${encodeURIComponent(eventId)}&cancelled=true`;
+        }, 1000);
       }
     } else {
-      dropin.setStatus('ready');
-      if (typeof window.showApiError === 'function') {
+      dropin.setStatus("ready");
+      if (typeof window.showApiError === "function") {
         window.showApiError({
-          endpoint: '/processAdyenPayment',
-          error: result.error || 'Payment failed',
+          endpoint: "/processAdyenPayment",
+          error: result.error || "Payment failed",
           status: result.status || 400,
           request: { body: { paymentID: window.paymentID } },
-          response: result
+          response: result,
         });
       }
     }
   } catch (error) {
-    console.error('Payment submission error:', error);
-    dropin.setStatus('error', { message: error.message || 'Payment submission failed.' });
+    console.error("Payment submission error:", error);
+    dropin.setStatus("error", { message: error.message || "Payment submission failed." });
   }
-};
+}
+
+// Window aliases for legacy access from non-module code paths.
+window.fetchCheckoutData = fetchCheckoutData;
+window.determineAdyenFlag = determineAdyenFlag;
+window.getPaymentConfiguration = getPaymentConfiguration;
+window.getPaymentResponse = getPaymentResponse;
+window.handleAdyenSubmit = handleAdyenSubmit;

@@ -3,7 +3,7 @@
  * Handles initialization and management of secure payment fields
  */
 
-class HostedFieldsManager {
+export class HostedFieldsManager {
   constructor() {
     this.fieldsInitialized = false;
     this.conversationToken = null;

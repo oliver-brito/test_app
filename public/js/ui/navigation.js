@@ -1,6 +1,10 @@
-// Navigation functionality
-(function() {
-  'use strict';
+// Navigation — injects nav HTML, wires logout / mobile toggle / object-type
+// filter, and registers window.getObjectTypeFilter. Side-effect module.
+
+export const _navigationLoaded = true;
+
+(function () {
+  "use strict";
 
   /**
    * Generate and inject navigation HTML into the page

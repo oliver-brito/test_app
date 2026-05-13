@@ -1,7 +1,9 @@
-// API Debug Console - VS Code style bottom panel for tracking API calls
-// Shows a collapsible log of all API requests and responses
+// API Debug Console — registers window.apiDebugConsole and auto-mounts the
+// VS Code-style bottom panel. Imported as a side-effect module from page entries.
 
-(function() {
+export const _apiDebugConsoleLoaded = true;
+
+(function () {
   const STORAGE_KEY_LOGS = 'apiDebugConsole_logs';
   const STORAGE_KEY_VISIBLE = 'apiDebugConsole_visible';
   const MAX_LOGS = 50;
