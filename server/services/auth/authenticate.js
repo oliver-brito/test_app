@@ -8,6 +8,7 @@ import { ENDPOINTS } from "../../../public/js/endpoints.js";
 import { parseResponse } from "../avResponse.js";
 import { filterCookieHeader } from "../../utils/cookieUtils.js";
 import { ApiError } from "../../middleware/errorHandler.js";
+import { recordApiCall } from "../requestContext.js";
 
 const JSON_HEADERS = { Accept: "application/json", "Content-Type": "application/json" };
 
@@ -48,6 +49,7 @@ export async function authenticate({ apiBase, username, password }) {
     },
     response: data,
   };
+  recordApiCall(apiCallMetadata);
 
   if (!response.ok || !data?.session) {
     throw new ApiError(response.status || 500, "Auth failed", {

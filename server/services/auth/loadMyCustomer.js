@@ -6,6 +6,7 @@
 import { ENDPOINTS } from "../../../public/js/endpoints.js";
 import { parseResponse } from "../avResponse.js";
 import { isDebugMode } from "../../utils/debug.js";
+import { recordApiCall } from "../requestContext.js";
 import { MY_CUSTOMER } from "../../av/objectNames.js";
 import { LOAD } from "../../av/methods.js";
 import { CUSTOMER_ID, CUSTOMER, PAYMENTS, CONTACTS, ADDRESSES } from "../../av/fields.js";
@@ -44,6 +45,7 @@ export async function loadMyCustomer({ apiBase, cookies, customerId }) {
     response: customerData,
     duration,
   };
+  recordApiCall(apiCallMetadata);
 
   if (!response.ok && isDebugMode()) {
     console.log("Warning: Customer load failed:", response.status);
