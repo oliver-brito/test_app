@@ -4,7 +4,7 @@ import { setSession } from "../utils/sessionStore.js";
 import { filterCookieHeader } from "../utils/cookieUtils.js";
 import { isDebugMode } from "../utils/debug.js";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
-import { parseResponse } from "../utils/common.js";
+import { parseResponse } from "../services/avResponse.js";
 
 const router = express.Router();
 

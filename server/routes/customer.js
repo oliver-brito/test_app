@@ -2,7 +2,7 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { makeApiCallWithErrorHandling } from "../utils/common.js";
+import { callAvManaged } from "../services/avClient.js";
 
 const router = express.Router();
 const { CUSTOMER: CUSTOMER_PATH } = ENDPOINTS;
@@ -12,7 +12,7 @@ router.post("/getMyAccountDetails", express.json(), async (req, res) => {
     get: ["Customer", "Payments", "Contacts", "Addresses"],
     objectName: "myCustomer",
   };
-  const customerResult = await makeApiCallWithErrorHandling(
+  const customerResult = await callAvManaged(
     res, CUSTOMER_PATH, customerPayload, "Failed to load customer details"
   );
   if (!customerResult) return;

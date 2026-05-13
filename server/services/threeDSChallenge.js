@@ -1,5 +1,5 @@
 import { ENDPOINTS } from "../../public/js/endpoints.js";
-import { sendCall, handleSetCookies, parseResponse } from "../utils/common.js";
+import { callAv } from "./avClient.js";
 import { printDebugMessage } from "../utils/debug.js";
 import { EXCEPTION_CODES } from "../constants.js";
 
@@ -33,9 +33,7 @@ export async function handleThreeDS(req, res, { paymentId } = {}) {
       objectName: "myOrder",
     };
 
-    const response = await sendCall(ORDER_PATH, payload);
-    await handleSetCookies(response);
-    const data = await parseResponse(response);
+    const { data } = await callAv(ORDER_PATH, payload);
 
     const paObj = data?.data?.[`Payments::${paymentId}::pa_request_information`];
     const paJsonStr = paObj?.standard || paObj?.input || paObj?.display || null;

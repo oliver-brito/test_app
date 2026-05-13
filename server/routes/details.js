@@ -2,7 +2,7 @@
 import express from "express";
 import { printDebugMessage } from "../utils/debug.js";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
-import { makeApiCallWithErrorHandling } from "../utils/common.js";
+import { callAvManaged } from "../services/avClient.js";
 
 const { ORDER: ORDER_PATH } = ENDPOINTS;
 const router = express.Router();
@@ -14,7 +14,7 @@ router.get("/order", async (req, res) => {
     objectName: "myOrder",
   };
 
-  const result = await makeApiCallWithErrorHandling(
+  const result = await callAvManaged(
     res, ORDER_PATH, payload, "Failed to fetch order details"
   );
   if (!result) return;
@@ -35,7 +35,7 @@ router.get("/details", async (req, res) => {
     objectName: "myOrder",
   };
 
-  const result = await makeApiCallWithErrorHandling(
+  const result = await callAvManaged(
     res, ORDER_PATH, payload, "Failed to fetch payment details"
   );
   if (!result) return;
