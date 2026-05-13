@@ -3,12 +3,18 @@ import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { makeApiCallWithErrorHandling } from "../utils/common.js";
 import { classifyException } from "../services/apiErrors.js";
+import { validate } from "../middleware/validate.js";
+import { ProcessThreeDSResponseBody } from "../schemas/threeDS.js";
 import { insertOrder, redirectToViewOrder } from "./common.js";
 
 const router = express.Router();
 const { ORDER: ORDER_PATH } = ENDPOINTS;
 
-router.post("/processThreeDSResponse", express.json(), async (req, res) => {
+router.post(
+  "/processThreeDSResponse",
+  express.json(),
+  validate(ProcessThreeDSResponseBody),
+  async (req, res) => {
   const { paymentId, pa_response_information, pa_response_URL } = req.body;
   const paymentsKeyBase = `Payments::${paymentId}`;
 

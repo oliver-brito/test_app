@@ -2,12 +2,14 @@
 import express from "express";
 import { printDebugMessage } from "../utils/debug.js";
 import { classifyException } from "../services/apiErrors.js";
+import { validate } from "../middleware/validate.js";
+import { TransactionBody, CheckoutBody } from "../schemas/payments.js";
 import { insertOrder, redirectToViewOrder, handleThreeDS, executeCheckoutSequence } from "./common.js";
 
 const router = express.Router();
 
 // POST /transaction -> Process payment transaction via AudienceView API
-router.post("/transaction", express.json(), async (req, res) => {
+router.post("/transaction", express.json(), validate(TransactionBody), async (req, res) => {
   const { paymentId } = req.body;
 
   const { response, data } = await insertOrder();
@@ -35,7 +37,7 @@ router.post("/transaction", express.json(), async (req, res) => {
   }, res);
 });
 
-router.post("/checkout", express.json(), async (req, res) => {
+router.post("/checkout", express.json(), validate(CheckoutBody), async (req, res) => {
   const { deliveryMethod, paymentMethod } = req.body;
 
   const paResponseURL = `${req.protocol}://${req.get("host")}/checkout.html`;

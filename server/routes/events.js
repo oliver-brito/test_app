@@ -3,6 +3,8 @@ import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
 import { makeApiCallWithErrorHandling } from "../utils/common.js";
+import { validate } from "../middleware/validate.js";
+import { MapAvailabilityBody } from "../schemas/seats.js";
 
 const {
   UPCOMING: UPCOMING_PATH,
@@ -59,7 +61,7 @@ router.get("/events/upcoming", async (req, res) => {
 });
 
 // POST /map/availability/:id -> getBestAvailable seats
-router.post("/map/availability/:id", async (req, res) => {
+router.post("/map/availability/:id", express.json(), validate(MapAvailabilityBody), async (req, res) => {
   const performanceId = req.params.id;
   const { priceTypeId, numSeats } = req.body;
   const payload = {

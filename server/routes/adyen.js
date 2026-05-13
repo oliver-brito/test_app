@@ -6,6 +6,8 @@ import { validateCall, makeApiCall, makeApiCallWithErrorHandling } from "../util
 import { classifyException } from "../services/apiErrors.js";
 import { ACCEPTED_WARNINGS } from "../constants.js";
 import { handleThreeDS, insertOrder, redirectToViewOrder } from "./common.js";
+import { validate } from "../middleware/validate.js";
+import { ProcessAdyenPaymentBody, PaymentIdBody } from "../schemas/payments.js";
 
 const router = express.Router();
 const { ORDER: ORDER_PATH, PAYMENT_METHOD: PAYMENTMETHOD_PATH } = ENDPOINTS;
@@ -84,7 +86,7 @@ router.post("/getPaymentClientConfig", express.json(), async (req, res) => {
 });
 
 // POST /getPaymentResponse -> Get gateway configuration for a payment record
-router.post("/getPaymentResponse", express.json(), async (req, res) => {
+router.post("/getPaymentResponse", express.json(), validate(PaymentIdBody), async (req, res) => {
   const { paymentID } = req.body;
   const payload = {
     get: [`Payments::${paymentID}::paymentmethod_gateway_config`],
@@ -140,7 +142,7 @@ router.post("/getPaymentResponse", express.json(), async (req, res) => {
 });
 
 // POST /processAdyenPayment -> Process Adyen payment data via AudienceView
-router.post("/processAdyenPayment", express.json(), async (req, res) => {
+router.post("/processAdyenPayment", express.json(), validate(ProcessAdyenPaymentBody), async (req, res) => {
   const { externalData, paymentID, resetPaymentAttempt } = req.body;
 
   // Step 1: Set external payment data
@@ -204,7 +206,7 @@ router.post("/processAdyenPayment", express.json(), async (req, res) => {
 });
 
 // POST /getPaymentMethodType -> Get payment method type for a specific payment ID
-router.post("/getPaymentMethodType", express.json(), async (req, res) => {
+router.post("/getPaymentMethodType", express.json(), validate(PaymentIdBody), async (req, res) => {
   const { paymentID } = req.body;
   const payload = {
     get: [`Payments::${paymentID}::paymentmethod_type`],

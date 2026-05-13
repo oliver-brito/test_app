@@ -4,12 +4,14 @@ import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
 import { makeApiCallWithErrorHandling } from "../utils/common.js";
 import { ACCEPTED_WARNINGS } from "../constants.js";
+import { validate } from "../middleware/validate.js";
+import { RemoveSeatBody } from "../schemas/seats.js";
 
 const router = express.Router();
 const { ORDER: ORDER_PATH } = ENDPOINTS;
 
 // POST /removeSeat -> Remove an admission by ID using manageAdmissions
-router.post("/removeSeat", express.json(), async (req, res) => {
+router.post("/removeSeat", express.json(), validate(RemoveSeatBody), async (req, res) => {
   const { admissionId } = req.body;
   const payload = {
     actions: [
