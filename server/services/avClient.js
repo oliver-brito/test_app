@@ -1,9 +1,9 @@
 // HTTP client for av-avon. Every server-side call to the AudienceView API
 // goes through one of:
 //   - callAv(path, payload)         — low-level: returns { response, data, apiCallMetadata }
-//   - callAvManaged(res, path, ...) — high-level: returns { ... } or null
-//                                     and sends a structured error response
-//                                     to the client when the upstream fails.
+//                                     regardless of HTTP status. Caller decides.
+//   - callAvManaged(path, payload)  — throws ApiError on non-2xx. The central
+//                                     error middleware turns the throw into JSON.
 //
 // Both auto-attach Session + Cookie, mirror inbound Set-Cookie headers back
 // into the session store, and record API-call metadata used by the
@@ -15,6 +15,7 @@ import { logApiCall, printDebugMessage } from "../utils/debug.js";
 import { mirrorSetCookies } from "./cookieSync.js";
 import { parseResponse } from "./avResponse.js";
 import { classifyException } from "./apiErrors.js";
+import { ApiError } from "../middleware/errorHandler.js";
 
 /** Active av-avon base URL: user-supplied at /login, falling back to .env. */
 function resolveApiBase() {
@@ -63,7 +64,7 @@ function buildApiCallMetadata({ url, path, payload, response, data, durationMs }
  */
 export async function callAv(path, payload, { manual = false } = {}) {
   const apiBase = resolveApiBase();
-  if (!apiBase) throw new Error("API_BASE is not defined");
+  if (!apiBase) throw new ApiError(500, "API_BASE is not defined");
 
   const url = `${apiBase}${path}`;
   const headers = {
@@ -95,22 +96,21 @@ export async function callAv(path, payload, { manual = false } = {}) {
 }
 
 /**
- * High-level helper: call av-avon and, on failure, send a structured error
- * response to the client. Returns null when an error response has been sent.
+ * High-level helper: call av-avon and **throw `ApiError`** on failure. The
+ * central error middleware renders the JSON response (uniformly shaped,
+ * including any apiCallMetadata trail).
  *
  * When `surfaceThreeDS` is true, a 4294 (3DS-required) failure is NOT
- * treated as an error; it's returned with `requires3ds: true` so the
- * caller can launch the challenge flow.
+ * an error; it's returned with `requires3ds: true` so the caller can
+ * launch the challenge flow explicitly.
  *
- * @param {import('express').Response} res
  * @param {string} path
  * @param {object} payload
- * @param {string} errorMessage           message to embed in error responses
+ * @param {string} errorMessage           message attached to ApiError on failure
  * @param {{ manual?: boolean, surfaceThreeDS?: boolean }} [opts]
  */
-export async function callAvManaged(res, path, payload, errorMessage, opts = {}) {
+export async function callAvManaged(path, payload, errorMessage, opts = {}) {
   const { manual = false, surfaceThreeDS = false } = opts;
-
   const result = await callAv(path, payload, { manual });
   const { response, data, apiCallMetadata } = result;
 
@@ -121,21 +121,10 @@ export async function callAvManaged(res, path, payload, errorMessage, opts = {})
     return { ...result, requires3ds: true };
   }
 
-  printDebugMessage(`${errorMessage}: ${response.status}`);
-  res.status(response.status).json({
-    error: errorMessage,
-    message: errorMessage,
-    status: response.status,
+  throw new ApiError(response.status, errorMessage, {
     endpoint: path,
-    request: { endpoint: path, payload, timestamp: new Date().toISOString() },
-    response: data,
+    requestPayload: payload,
     details: data,
-    debugInfo: {
-      timestamp: new Date().toISOString(),
-      statusText: response.statusText || "Unknown Error",
-    },
+    apiCallMetadata,
   });
-  // Also include the apiCallMetadata so the debug console can log it.
-  void apiCallMetadata;
-  return null;
 }

@@ -108,23 +108,23 @@ describe("runCheckoutSequence", () => {
     expect(callTitles).not.toContain("addPayment");
   });
 
-  it("short-circuits to null if a step's upstream call returns null", async () => {
-    // First call returns the customer id; second call (addCustomer) "fails"
-    // — ctx.call returns null when the upstream helper already sent an error.
+  it("propagates the upstream error when a step throws", async () => {
+    // Step 0 returns customer_id; step 1 (addCustomer) rejects with an
+    // ApiError-like throw — ctx.call should re-throw with the trail attached.
     callAvManaged
       .mockResolvedValueOnce(
         ok({ data: { "Customer::customer_id": { standard: "CUST-1" } } }, "getCustomerId")
       )
-      .mockResolvedValueOnce(null);
+      .mockRejectedValueOnce(Object.assign(new Error("addCustomer boom"), { status: 502 }));
 
     const res = mockRes();
-    const result = await runCheckoutSequence(res, {
-      deliveryMethod: "MAIL",
-      paymentMethod: "VISA",
-      paResponseURL: "https://example/return",
-    });
-
-    expect(result).toBeNull();
+    await expect(
+      runCheckoutSequence(res, {
+        deliveryMethod: "MAIL",
+        paymentMethod: "VISA",
+        paResponseURL: "https://example/return",
+      })
+    ).rejects.toThrow("addCustomer boom");
     expect(callAvManaged).toHaveBeenCalledTimes(2);
   });
 });

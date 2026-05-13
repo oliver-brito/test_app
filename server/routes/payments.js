@@ -53,8 +53,6 @@ router.post("/checkout", express.json(), validate(CheckoutBody), async (req, res
   const paResponseURL = `${req.protocol}://${req.get("host")}/checkout.html`;
 
   const result = await runCheckoutSequence(res, { deliveryMethod, paymentMethod, paResponseURL });
-  if (!result) return; // error response already sent
-
   printDebugMessage("Checkout completed successfully");
   res.json(result);
 });

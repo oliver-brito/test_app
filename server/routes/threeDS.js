@@ -26,7 +26,7 @@ router.post(
 
     // 1. Hand the PaRes back to av-avon.
     const setResponse = await callAvManaged(
-      res,
+      
       ORDER_PATH,
       {
         set: {
@@ -39,7 +39,6 @@ router.post(
       "Failed to submit 3DS response",
       { manual: true }
     );
-    if (!setResponse) return;
 
     const backendApiCalls = setResponse.apiCallMetadata ? [setResponse.apiCallMetadata] : [];
 

@@ -99,12 +99,11 @@ router.post("/getPaymentResponse", express.json(), validate(PaymentIdBody), asyn
   const gatewayConfigField = paymentField(paymentId, PAYMENT_FIELDS.PAYMENTMETHOD_GATEWAY_CONFIG);
 
   const result = await callAvManaged(
-    res,
+    
     ORDER_PATH,
     { get: [gatewayConfigField], objectName: MY_ORDER },
     "Failed to fetch payment gateway config"
   );
-  if (!result) return;
 
   const gatewayConfig = unwrap(result.data, gatewayConfigField);
   if (!gatewayConfig) {
@@ -160,7 +159,7 @@ router.post(
 
     // 1. Push the Adyen response payload onto the Payment record.
     const setResult = await callAvManaged(
-      res,
+      
       ORDER_PATH,
       {
         set: { [paymentField(paymentId, PAYMENT_FIELDS.EXTERNAL_PAYMENT_DATA)]: externalData },
@@ -169,7 +168,6 @@ router.post(
       },
       "Failed to process Adyen payment"
     );
-    if (!setResult) return;
 
     // 2. Re-insert the order so av-avon completes the charge.
     const { response: txResp, data: txData } = await insertOrder({
@@ -228,12 +226,11 @@ router.post(
     const typeField = paymentField(paymentId, PAYMENT_FIELDS.PAYMENTMETHOD_TYPE);
 
     const result = await callAvManaged(
-      res,
+      
       ORDER_PATH,
       { get: [typeField], objectName: MY_ORDER },
       "Failed to fetch payment method type"
     );
-    if (!result) return;
 
     const paymentMethodType = unwrap(result.data, typeField);
     if (!paymentMethodType) {
