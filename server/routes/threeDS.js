@@ -5,7 +5,7 @@ import { makeApiCallWithErrorHandling } from "../utils/common.js";
 import { classifyException } from "../services/apiErrors.js";
 import { validate } from "../middleware/validate.js";
 import { ProcessThreeDSResponseBody } from "../schemas/threeDS.js";
-import { insertOrder, redirectToViewOrder } from "./common.js";
+import { insertOrder, redirectToViewOrder } from "../services/order.js";
 
 const router = express.Router();
 const { ORDER: ORDER_PATH } = ENDPOINTS;
