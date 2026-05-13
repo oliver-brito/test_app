@@ -14,7 +14,7 @@ const KEY = "checkoutContext";
  * @property {string} [eventDate]
  * @property {string} [deliveryMethod]
  * @property {string} [paymentMethod]
- * @property {string} [paymentID]
+ * @property {string} [paymentId]
  */
 
 /** @returns {CheckoutContext} */

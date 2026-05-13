@@ -20,7 +20,7 @@ router.post("/transaction", express.json(), validate(TransactionBody), async (re
     // av-avon exception 4294 means the payment requires a 3DS challenge.
     if (classifyException(data) === "threeDS") {
       printDebugMessage("Transaction requires 3DS authentication");
-      return handleThreeDS(req, res, { paymentID: paymentId });
+      return handleThreeDS(req, res, { paymentId: paymentId });
     }
     printDebugMessage(`Transaction failed: ${response.status}`);
     return res.status(response.status).json({ success: false, error: "Transaction failed", details: data });

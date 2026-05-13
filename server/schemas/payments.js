@@ -11,10 +11,10 @@ export const CheckoutBody = z.object({
 
 export const ProcessAdyenPaymentBody = z.object({
   externalData: z.unknown(),
-  paymentID: z.string().min(1),
+  paymentId: z.string().min(1),
   resetPaymentAttempt: z.boolean().optional(),
 });
 
 export const PaymentIdBody = z.object({
-  paymentID: z.string().min(1),
+  paymentId: z.string().min(1),
 });

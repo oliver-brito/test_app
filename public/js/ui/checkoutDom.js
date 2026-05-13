@@ -25,35 +25,35 @@ export function allowOverrideFromHashMaybe(tokens) {
   );
   if (overrideToken) tokens.conversationToken = overrideToken;
   const overridePaymentID = prompt(
-    "Override paymentID? Leave blank to use default.",
-    tokens.paymentID
+    "Override paymentId? Leave blank to use default.",
+    tokens.paymentId
   );
   if (overridePaymentID) {
-    tokens.paymentID = overridePaymentID;
-    window.paymentID = tokens.paymentID;
+    tokens.paymentId = overridePaymentID;
+    window.paymentId = tokens.paymentId;
   }
   return tokens;
 }
 
-function renderSharedInfo(eventId, deliveryMethod, paymentMethod, pa_request_url, conversationToken, paymentID) {
+function renderSharedInfo(eventId, deliveryMethod, paymentMethod, pa_request_url, conversationToken, paymentId) {
   return `
     <div class="label">Event ID:</div><div class="value">${eventId}</div>
     <div class="label">Delivery Method:</div><div class="value">${deliveryMethod}</div>
     <div class="label">Payment Method:</div><div class="value">${paymentMethod}</div>
     <div class="label">PA Request URL:</div><div class="value"><a href="${pa_request_url}" target="_blank">${pa_request_url}</a></div>
     <div class="label">Conversation Token:</div><div class="value" id="conv-token-value">${conversationToken}</div>
-    <div class="label">Payment ID:</div><div class="value" id="payment-id-value">${paymentID}</div>
+    <div class="label">Payment ID:</div><div class="value" id="payment-id-value">${paymentId}</div>
     <button type="button" class="btn" id="change-info-btn" style="margin-bottom:16px; width:auto;">Change Info</button>
   `;
 }
 
-export function renderCheckoutInfo(resultDiv, adyenFlag, eventId, deliveryMethod, paymentMethod, pa_request_url, conversationToken, paymentID) {
+export function renderCheckoutInfo(resultDiv, adyenFlag, eventId, deliveryMethod, paymentMethod, pa_request_url, conversationToken, paymentId) {
   if (adyenFlag) {
-    resultDiv.innerHTML = renderSharedInfo(eventId, deliveryMethod, paymentMethod, pa_request_url, conversationToken, paymentID);
+    resultDiv.innerHTML = renderSharedInfo(eventId, deliveryMethod, paymentMethod, pa_request_url, conversationToken, paymentId);
     return;
   }
   resultDiv.innerHTML =
-    renderSharedInfo(eventId, deliveryMethod, paymentMethod, pa_request_url, conversationToken, paymentID) +
+    renderSharedInfo(eventId, deliveryMethod, paymentMethod, pa_request_url, conversationToken, paymentId) +
     `
       <form id="payment-form" method="post" action="process_payment" style="margin-top:24px;">
         <h3>Payment Details</h3>
@@ -66,12 +66,12 @@ export function renderCheckoutInfo(resultDiv, adyenFlag, eventId, deliveryMethod
         <label for="cardholder_name-container">Cardholder Name:</label>
         <input
           type="text"
-          name="BOset::BOorder::Payments::${paymentID}::cardholder_name"
+          name="BOset::BOorder::Payments::${paymentId}::cardholder_name"
           maxlength="100"
           class="input form-control"
           value=""
           title="Cardholder Name"
-          id="BOset::BOorder::Payments::${paymentID}::cardholder_name"
+          id="BOset::BOorder::Payments::${paymentId}::cardholder_name"
           required
           autocomplete="cc-name">
         <button type="submit" class="btn" id="submit-button" onClick="handleSubmit(event)">Submit Payment</button>
@@ -94,7 +94,7 @@ export function initHostedFields(conversationToken, pa_request_url, resultDiv) {
   });
 }
 
-export function wireChangeInfoButton(conversationTokenRef, paymentIDRef, resultDiv) {
+export function wireChangeInfoButton(conversationTokenRef, paymentIdRef, resultDiv) {
   const el = document.getElementById("change-info-btn");
   if (!el) return;
   el.onclick = function () {
@@ -103,15 +103,15 @@ export function wireChangeInfoButton(conversationTokenRef, paymentIDRef, resultD
       conversationTokenRef.value
     );
     if (newToken !== null && newToken !== "") conversationTokenRef.value = newToken;
-    const newPaymentID = prompt("Override paymentID? Leave blank to use current.", paymentIDRef.value);
+    const newPaymentID = prompt("Override paymentId? Leave blank to use current.", paymentIdRef.value);
     if (newPaymentID !== null && newPaymentID !== "") {
-      paymentIDRef.value = newPaymentID;
-      window.paymentID = paymentIDRef.value;
+      paymentIdRef.value = newPaymentID;
+      window.paymentId = paymentIdRef.value;
     }
     const convEl = document.getElementById("conv-token-value");
     if (convEl) convEl.textContent = conversationTokenRef.value;
     const pidEl = document.getElementById("payment-id-value");
-    if (pidEl) pidEl.textContent = paymentIDRef.value;
+    if (pidEl) pidEl.textContent = paymentIdRef.value;
     renderCheckoutInfo(
       resultDiv,
       window.adyen,
@@ -120,7 +120,7 @@ export function wireChangeInfoButton(conversationTokenRef, paymentIDRef, resultD
       conversationTokenRef.paymentMethod,
       conversationTokenRef.pa_request_url,
       conversationTokenRef.value,
-      paymentIDRef.value
+      paymentIdRef.value
     );
     if (window.adyen) renderAdyenDropIn(resultDiv);
     else initHostedFields(conversationTokenRef.value, conversationTokenRef.pa_request_url, resultDiv);

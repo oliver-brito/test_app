@@ -24,7 +24,7 @@ export function handleSubmit(event) {
     return;
   }
 
-  const currentPaymentId = window.paymentID || "";
+  const currentPaymentId = window.paymentId || "";
 
   try {
     const submissionResult = AvHostedInputSDK.submitGroup();

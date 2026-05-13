@@ -62,7 +62,7 @@ describe("runCheckoutSequence", () => {
     });
 
     expect(result).not.toBeNull();
-    expect(result.paymentID).toBe("PAY-1");
+    expect(result.paymentId).toBe("PAY-1");
     expect(result.payment_details).toEqual({ foo: "bar" });
     expect(result.backendApiCalls).toHaveLength(7);
 
@@ -102,7 +102,7 @@ describe("runCheckoutSequence", () => {
       paResponseURL: "https://example/return",
     });
 
-    expect(result.paymentID).toBe("EXISTING-PAY");
+    expect(result.paymentId).toBe("EXISTING-PAY");
     expect(makeApiCallWithErrorHandling).toHaveBeenCalledTimes(6);
     const callTitles = result.backendApiCalls.map((c) => c.title);
     expect(callTitles).not.toContain("addPayment");
