@@ -2,7 +2,7 @@
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
-import { callAvManaged } from "../services/avClient.js";
+import { av } from "../services/av.js";
 import { ACCEPTED_WARNINGS } from "../constants.js";
 import { validate } from "../middleware/validate.js";
 import { RemoveSeatBody } from "../schemas/seats.js";
@@ -21,22 +21,20 @@ const { ORDER: ORDER_PATH } = ENDPOINTS;
 
 router.post("/removeSeat", express.json(), validate(RemoveSeatBody), async (req, res) => {
   const { admissionId } = req.body;
-  const payload = {
-    actions: [
-      {
-        method: MANAGE_ADMISSIONS,
-        params: { removeAdmissionID: [admissionId] },
-        acceptWarnings: ACCEPTED_WARNINGS.REMOVE_ADMISSION,
-      },
-    ],
-    get: [ORDER, ADMISSIONS, AVAILABLE_PAYMENT_METHODS, DELIVERY_METHOD_DETAILS, SEATS],
-    objectName: MY_ORDER,
-  };
 
-  const result = await callAvManaged(ORDER_PATH, payload, "Failed to remove admission");
+  const { data } = await av
+    .on(MY_ORDER)
+    .action(
+      MANAGE_ADMISSIONS,
+      { removeAdmissionID: [admissionId] },
+      { acceptWarnings: ACCEPTED_WARNINGS.REMOVE_ADMISSION }
+    )
+    .get(ORDER, ADMISSIONS, AVAILABLE_PAYMENT_METHODS, DELIVERY_METHOD_DETAILS, SEATS)
+    .post(ORDER_PATH)
+    .orFail("Failed to remove admission");
 
   printDebugMessage("Seat removal successful");
-  res.json({ success: true, response: result.data });
+  res.json({ success: true, response: data });
 });
 
 export default router;

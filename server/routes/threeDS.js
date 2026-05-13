@@ -2,7 +2,7 @@
 // 3DS challenge and finalizes the order.
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
-import { callAvManaged } from "../services/avClient.js";
+import { av } from "../services/av.js";
 import { classifyException } from "../services/apiErrors.js";
 import { unwrap } from "../services/avResponse.js";
 import { validate } from "../middleware/validate.js";
@@ -25,20 +25,16 @@ router.post(
     const { paymentId, pa_response_information, pa_response_URL } = req.body;
 
     // 1. Hand the PaRes back to av-avon.
-    const setResponse = await callAvManaged(
-      
-      ORDER_PATH,
-      {
-        set: {
-          [paymentField(paymentId, PAYMENT_FIELDS.PA_RESPONSE_INFORMATION)]: pa_response_information,
-          [paymentField(paymentId, PAYMENT_FIELDS.PA_RESPONSE_URL)]: pa_response_URL,
-        },
-        objectName: MY_ORDER,
-        get: [PAYMENTS],
-      },
-      "Failed to submit 3DS response",
-      { manual: true }
-    );
+    const setResponse = await av
+      .on(MY_ORDER)
+      .set({
+        [paymentField(paymentId, PAYMENT_FIELDS.PA_RESPONSE_INFORMATION)]: pa_response_information,
+        [paymentField(paymentId, PAYMENT_FIELDS.PA_RESPONSE_URL)]: pa_response_URL,
+      })
+      .get(PAYMENTS)
+      .manual()
+      .post(ORDER_PATH)
+      .orFail("Failed to submit 3DS response");
 
     const backendApiCalls = setResponse.apiCallMetadata ? [setResponse.apiCallMetadata] : [];
 

@@ -1,7 +1,7 @@
 // Order-level helpers shared by every payment flow.
 
 import { ENDPOINTS } from "../../public/js/endpoints.js";
-import { callAv } from "./avClient.js";
+import { av } from "./av.js";
 import { ACCEPTED_WARNINGS } from "../constants.js";
 import { MY_ORDER } from "../av/objectNames.js";
 import { INSERT } from "../av/methods.js";
@@ -18,17 +18,12 @@ export async function insertOrder({ resetPaymentAttempt = false } = {}) {
   const insertParams = { notification: "correspondence" };
   if (resetPaymentAttempt) insertParams.resetPaymentAttempt = "1";
 
-  return callAv(
-    ORDER_PATH,
-    {
-      actions: [
-        { method: INSERT, params: insertParams, acceptWarnings: ACCEPTED_WARNINGS.INSERT_ORDER },
-      ],
-      objectName: MY_ORDER,
-      get: [ORDER, ADMISSIONS, PAYMENTS, ORDER_NUMBER],
-    },
-    { manual: true }
-  );
+  return av
+    .on(MY_ORDER)
+    .action(INSERT, insertParams, { acceptWarnings: ACCEPTED_WARNINGS.INSERT_ORDER })
+    .get(ORDER, ADMISSIONS, PAYMENTS, ORDER_NUMBER)
+    .manual()
+    .post(ORDER_PATH);
 }
 
 /**
