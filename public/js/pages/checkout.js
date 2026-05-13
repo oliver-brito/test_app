@@ -13,6 +13,7 @@ import "../flows/paymentFlow.js";
 import { checkAndRefreshAuth } from "../shared/auth.js";
 import { fetchCheckoutData, determineAdyenFlag } from "../adyen/adyenApi.js";
 import { renderAdyenDropIn, handleUrlParameters } from "../adyen/adyenDropin.js";
+import { getContext, setContext } from "../shared/checkoutContext.js";
 import {
   getCheckoutContext,
   allowOverrideFromHashMaybe,
@@ -32,7 +33,7 @@ async function doCheckout() {
     let conversationToken = payment_details.server_to_client_token?.standard || "";
     let paymentID = payment_details.payment_id?.standard || "";
     window.paymentID = paymentID;
-    localStorage.setItem("paymentID", paymentID);
+    setContext({ paymentID });
     await determineAdyenFlag(paymentID);
 
     const tokens = allowOverrideFromHashMaybe({ conversationToken, paymentID });
@@ -70,7 +71,7 @@ async function doCheckout() {
 async function doCheckoutReusePayment() {
   const ctx = getCheckoutContext();
   const { eventId, deliveryMethod, paymentMethod, resultDiv } = ctx;
-  const existingPaymentID = localStorage.getItem("paymentID");
+  const existingPaymentID = getContext().paymentID;
 
   if (!existingPaymentID) return doCheckout();
 
@@ -97,8 +98,8 @@ window.doCheckoutReusePayment = doCheckoutReusePayment;
   if (!(await checkAndRefreshAuth())) return;
 
   try {
-    const localStoragePaymentID = localStorage.getItem("paymentID");
-    let result = handleUrlParameters(localStoragePaymentID);
+    const storedPaymentID = getContext().paymentID;
+    let result = handleUrlParameters(storedPaymentID);
     if (result && typeof result.then === "function") result = await result;
 
     const checkoutMode = new URLSearchParams(location.search).get("mode");

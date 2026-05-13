@@ -5,12 +5,14 @@
 
 import { HostedFieldsManager } from "../adyen/hostedFields.js";
 import { renderAdyenDropIn } from "../adyen/adyenDropin.js";
+import { getContext, getEventId } from "../shared/checkoutContext.js";
 
 export function getCheckoutContext() {
+  const ctx = getContext();
   return {
-    deliveryMethod: localStorage.getItem("deliveryMethod") || "",
-    paymentMethod: localStorage.getItem("paymentMethod") || "",
-    eventId: localStorage.getItem("eventId") || "",
+    deliveryMethod: ctx.deliveryMethod || "",
+    paymentMethod: ctx.paymentMethod || "",
+    eventId: getEventId(),
     resultDiv: document.getElementById("result"),
   };
 }

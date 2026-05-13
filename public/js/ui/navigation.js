@@ -152,16 +152,10 @@ export const _navigationLoaded = true;
     logoutBtn.addEventListener('click', function(e) {
       e.preventDefault();
 
-      // Clear session storage
+      // Clear session + checkout context (sessionStorage)
       sessionStorage.removeItem('av_credentials');
       sessionStorage.removeItem('av_session');
-
-      // Clear any other stored data
-      localStorage.removeItem('deliveryMethod');
-      localStorage.removeItem('paymentMethod');
-      localStorage.removeItem('eventId');
-      localStorage.removeItem('eventName');
-      localStorage.removeItem('eventDate');
+      sessionStorage.removeItem('checkoutContext');
 
       // Redirect to login
       window.location.href = 'login.html';

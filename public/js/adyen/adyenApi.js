@@ -1,6 +1,7 @@
 // Adyen-specific API helpers used by the checkout flow.
 
 import { apiCall } from "../shared/api.js";
+import { getContext, getEventId } from "../shared/checkoutContext.js";
 
 export async function fetchCheckoutData({ eventId, deliveryMethod, paymentMethod }) {
   return apiCall("/checkout", {
@@ -32,10 +33,9 @@ export async function determineAdyenFlag(paymentID) {
 }
 
 export async function getPaymentConfiguration() {
-  const paymentMethodId = localStorage.getItem("paymentMethod") || "";
-  const eventId = localStorage.getItem("eventId") || "";
+  const { paymentMethod = "" } = getContext();
   const serverConfig = await apiCall("/getPaymentClientConfig", {
-    body: { paymentMethodId, eventId, paymentID: window.paymentID },
+    body: { paymentMethodId: paymentMethod, eventId: getEventId(), paymentID: window.paymentID },
   });
   return {
     environment: serverConfig.environment,
@@ -83,7 +83,7 @@ export async function handleAdyenSubmit(state, dropin) {
       }
     } else if (result.cancelled) {
       dropin.setStatus("error", { message: result.error || "Payment was cancelled." });
-      const eventId = localStorage.getItem("eventId");
+      const eventId = getEventId();
       if (eventId) {
         setTimeout(() => {
           window.location.href = `event.html?id=${encodeURIComponent(eventId)}&cancelled=true`;

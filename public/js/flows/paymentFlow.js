@@ -5,6 +5,7 @@
 import { apiCall } from "../shared/api.js";
 import { setSubmitting, showError, showSuccess, mountProcessButton } from "../ui/submitUI.js";
 import { launch3DSChallenge } from "./threeDS.js";
+import { getContext, getEventId } from "../shared/checkoutContext.js";
 
 /**
  * Submit the hosted-fields group via the Av SDK, then mount a "process
@@ -46,15 +47,16 @@ export function handleSubmit(event) {
 
 async function processTransaction(paymentData, paymentId) {
   try {
+    const ctx = getContext();
     const payload = {
       paymentData,
       paymentId,
       orderData: {
-        eventId: localStorage.getItem("eventId"),
-        deliveryMethod: localStorage.getItem("deliveryMethod"),
-        paymentMethod: localStorage.getItem("paymentMethod"),
-        eventName: localStorage.getItem("eventName"),
-        eventDate: localStorage.getItem("eventDate"),
+        eventId: getEventId(),
+        deliveryMethod: ctx.deliveryMethod,
+        paymentMethod: ctx.paymentMethod,
+        eventName: ctx.eventName,
+        eventDate: ctx.eventDate,
       },
     };
 
