@@ -1,5 +1,9 @@
-// Details button logic
-document.addEventListener('DOMContentLoaded', function() {
+// Details modal — auto-wires the "Show Details" button on checkout.html.
+// Side-effect module: imported for its DOMContentLoaded handler.
+
+export const _detailsModalLoaded = true;
+
+document.addEventListener("DOMContentLoaded", function () {
 const detailsBtn = document.getElementById('details-btn');
 const detailsModal = document.getElementById('details-modal');
 const detailsContent = document.getElementById('details-content');

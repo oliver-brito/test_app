@@ -1,13 +1,13 @@
-// Order confirmation page functionality
-(async function() {
-  'use strict';
+// Order confirmation page entry.
 
-  /**
-   * Load and display order details
-   */
+import "../ui/errorModal.js";
+import "../ui/apiDebugConsole.js";
+import "../ui/navigation.js";
+import { checkAndRefreshAuth } from "../shared/auth.js";
+
+(async function () {
   async function loadOrderDetails() {
-    // Check auth and refresh server credentials before loading order
-    if (!(await window.checkAndRefreshAuth())) {
+    if (!(await checkAndRefreshAuth())) {
       return; // Will redirect to login
     }
 
