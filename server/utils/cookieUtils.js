@@ -1,4 +1,7 @@
-// server/utils/cookieUtils.js
+// Parsing/merging helpers for av-avon Set-Cookie response headers. Used
+// by services/cookieSync.js (outbound mirroring) and routes/login.js
+// (which has to handle cookies manually because the session is being
+// established by the very call it's making).
 
 import { getCookies, setCookies } from "../utils/sessionStore.js";
 

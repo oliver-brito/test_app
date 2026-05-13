@@ -1,3 +1,5 @@
+// Checkout step 2: attach the resolved customer to the active order.
+
 import { ENDPOINTS } from "../../../public/js/endpoints.js";
 import { MY_ORDER } from "../../av/objectNames.js";
 import { ADD_CUSTOMER } from "../../av/methods.js";

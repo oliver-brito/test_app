@@ -1,3 +1,5 @@
+// zod schemas for the seats / map-availability routes.
+
 import { z } from "zod";
 
 export const RemoveSeatBody = z.object({

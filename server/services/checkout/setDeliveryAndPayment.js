@@ -1,3 +1,6 @@
+// Checkout step 4: set the chosen delivery method on the order and assign
+// the chosen payment method (plus cardholder placeholder) to the Payment.
+
 import { ENDPOINTS } from "../../../public/js/endpoints.js";
 import { DEFAULT_CARDHOLDER_NAME } from "../../constants.js";
 import { MY_ORDER } from "../../av/objectNames.js";

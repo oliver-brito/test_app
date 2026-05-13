@@ -1,11 +1,20 @@
-// global debug variable
+// Debug logging utilities. Distinct from morgan (which logs HTTP requests
+// at the middleware layer): these are domain-level traces toggled by a
+// global flag — handy when chasing a specific av-avon call's payload.
+
 let DEBUG_MODE = false;
+
+/** True when verbose tracing is enabled. */
 export function isDebugMode() {
   return DEBUG_MODE;
 }
+
+/** Toggle verbose tracing at runtime. */
 export function setDebugMode(value) {
   DEBUG_MODE = value;
 }
+
+/** No-op unless DEBUG_MODE is true. Use for domain-level (not HTTP) traces. */
 export function printDebugMessage(message) {
   if (DEBUG_MODE) {
     console.log(message);

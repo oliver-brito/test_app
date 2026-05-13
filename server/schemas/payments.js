@@ -1,3 +1,7 @@
+// zod schemas for the payment-related routes. Applied via the `validate`
+// middleware (server/middleware/validate.js) which rejects malformed
+// requests with a 400 before the handler runs.
+
 import { z } from "zod";
 
 export const TransactionBody = z.object({

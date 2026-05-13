@@ -1,6 +1,7 @@
-// server/utils/sessionStore.js
-
-// Global session, cookies, and API base store
+// In-memory store of the user's av-avon session. Lives for the lifetime
+// of the Node process (single-user test app). Set by routes/login.js
+// after a successful authenticate(); read by services/avClient.js when
+// attaching headers to every outbound call.
 let CURRENT_SESSION = null;
 let CURRENT_COOKIES = "";
 let CURRENT_API_BASE = null;
