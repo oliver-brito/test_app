@@ -7,6 +7,7 @@
 // backendApiCalls trail so the browser-side debug console can replay it.
 
 import { printDebugMessage } from "../utils/debug.js";
+import { getApiCalls } from "../services/requestContext.js";
 
 /**
  * Thrown by route handlers and services to surface a specific HTTP status
@@ -48,7 +49,7 @@ export function errorHandler(err, req, res, _next) {
         : null,
       response: err.details,
       details: err.details,
-      backendApiCalls: err.backendApiCalls ?? (err.apiCallMetadata ? [err.apiCallMetadata] : []),
+      backendApiCalls: err.backendApiCalls ?? getApiCalls(),
       debugInfo: { timestamp: new Date().toISOString() },
     });
   }

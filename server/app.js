@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 
 import { securityMiddleware } from "./config/security.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { runWithRequestContext } from "./services/requestContext.js";
 
 import loginRouter from "./routes/login.js";
 import eventsRouter from "./routes/events.js";
@@ -29,6 +30,10 @@ export function createApp({ enableLogging = true } = {}) {
   app.use(securityMiddleware);
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
+  // Every request gets a fresh AsyncLocalStorage frame holding its
+  // backend-api-call trail. The av builder pushes into it; the error
+  // handler surfaces it under `backendApiCalls` in error responses.
+  app.use((req, res, next) => runWithRequestContext(next));
   app.use(express.static(path.join(__dirname, "../public")));
 
   app.use("/", loginRouter);
