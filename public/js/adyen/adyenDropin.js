@@ -88,7 +88,7 @@ export async function handleUrlParameters(paymentId) {
   const paResponseUrl = window.location.href || window.location.origin + "/checkout.html";
 
   const payload = {
-    paymentId: paymentId || window.paymentId || window.paymentId || null,
+    paymentId: paymentId || null,
     pa_response_information: encoded,
     pa_response_URL: paResponseUrl,
   };

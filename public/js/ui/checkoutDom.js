@@ -1,11 +1,13 @@
-// DOM-rendering helpers for the checkout page. Builds the summary panel and
-// either the hosted-fields form or the Adyen Drop-in shell. The rendered
-// HTML uses an inline onClick="handleSubmit(event)" handler, which is
-// installed by flows/paymentFlow.js via window.handleSubmit.
+// DOM-rendering helpers for the checkout page. Builds the summary panel
+// and either the hosted-fields form or the Adyen Drop-in shell.
+//
+// `renderCheckoutInfo` writes HTML and then wires the submit button via
+// `addEventListener` — no inline `onClick=` handlers, no window globals.
 
 import { HostedFieldsManager } from "../adyen/hostedFields.js";
 import { renderAdyenDropIn } from "../adyen/adyenDropin.js";
-import { getContext, getEventId } from "../shared/checkoutContext.js";
+import { getContext, setContext, getEventId } from "../shared/checkoutContext.js";
+import { handleSubmit } from "../flows/paymentFlow.js";
 
 export function getCheckoutContext() {
   const ctx = getContext();
@@ -24,13 +26,13 @@ export function allowOverrideFromHashMaybe(tokens) {
     tokens.conversationToken
   );
   if (overrideToken) tokens.conversationToken = overrideToken;
-  const overridePaymentID = prompt(
+  const overridePaymentId = prompt(
     "Override paymentId? Leave blank to use default.",
     tokens.paymentId
   );
-  if (overridePaymentID) {
-    tokens.paymentId = overridePaymentID;
-    window.paymentId = tokens.paymentId;
+  if (overridePaymentId) {
+    tokens.paymentId = overridePaymentId;
+    setContext({ paymentId: overridePaymentId });
   }
   return tokens;
 }
@@ -74,14 +76,18 @@ export function renderCheckoutInfo(resultDiv, adyenFlag, eventId, deliveryMethod
           id="BOset::BOorder::Payments::${paymentId}::cardholder_name"
           required
           autocomplete="cc-name">
-        <button type="submit" class="btn" id="submit-button" onClick="handleSubmit(event)">Submit Payment</button>
+        <button type="submit" class="btn" id="submit-button">Submit Payment</button>
       </form>
     `;
+
+  // The submit button is rendered above; wire it via addEventListener so we
+  // don't need an inline onClick (and the corresponding window.handleSubmit).
+  const form = resultDiv.querySelector("#payment-form");
+  form?.addEventListener("submit", handleSubmit);
 }
 
 export function initHostedFields(conversationToken, pa_request_url, resultDiv) {
   const hostedFieldsManager = new HostedFieldsManager();
-  window.currentHostedFieldsManager = hostedFieldsManager;
   hostedFieldsManager.initializeHostedFields({
     conversationToken,
     paRequestUrl: pa_request_url,
@@ -103,18 +109,20 @@ export function wireChangeInfoButton(conversationTokenRef, paymentIdRef, resultD
       conversationTokenRef.value
     );
     if (newToken !== null && newToken !== "") conversationTokenRef.value = newToken;
-    const newPaymentID = prompt("Override paymentId? Leave blank to use current.", paymentIdRef.value);
-    if (newPaymentID !== null && newPaymentID !== "") {
-      paymentIdRef.value = newPaymentID;
-      window.paymentId = paymentIdRef.value;
+    const newPaymentId = prompt("Override paymentId? Leave blank to use current.", paymentIdRef.value);
+    if (newPaymentId !== null && newPaymentId !== "") {
+      paymentIdRef.value = newPaymentId;
+      setContext({ paymentId: newPaymentId });
     }
     const convEl = document.getElementById("conv-token-value");
     if (convEl) convEl.textContent = conversationTokenRef.value;
     const pidEl = document.getElementById("payment-id-value");
     if (pidEl) pidEl.textContent = paymentIdRef.value;
+
+    const { isAdyenFlow } = getContext();
     renderCheckoutInfo(
       resultDiv,
-      window.adyen,
+      isAdyenFlow,
       conversationTokenRef.eventId,
       conversationTokenRef.deliveryMethod,
       conversationTokenRef.paymentMethod,
@@ -122,14 +130,7 @@ export function wireChangeInfoButton(conversationTokenRef, paymentIdRef, resultD
       conversationTokenRef.value,
       paymentIdRef.value
     );
-    if (window.adyen) renderAdyenDropIn(resultDiv);
+    if (isAdyenFlow) renderAdyenDropIn(resultDiv);
     else initHostedFields(conversationTokenRef.value, conversationTokenRef.pa_request_url, resultDiv);
   };
 }
-
-// Window aliases used by the inline checkout.html bootstrap script.
-window.getCheckoutContext = getCheckoutContext;
-window.renderCheckoutInfo = renderCheckoutInfo;
-window.initHostedFields = initHostedFields;
-window.wireChangeInfoButton = wireChangeInfoButton;
-window.allowOverrideFromHashMaybe = allowOverrideFromHashMaybe;

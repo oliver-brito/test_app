@@ -1,41 +1,42 @@
 // Adyen-specific API helpers used by the checkout flow.
 
 import { apiCall } from "../shared/api.js";
-import { getContext, getEventId } from "../shared/checkoutContext.js";
+import { getContext, setContext, getEventId } from "../shared/checkoutContext.js";
 
 export async function fetchCheckoutData({ eventId, deliveryMethod, paymentMethod }) {
-  return apiCall("/checkout", {
-    body: { eventId, deliveryMethod, paymentMethod },
-  });
+  return apiCall("/checkout", { body: { eventId, deliveryMethod, paymentMethod } });
 }
 
+/**
+ * Ask the server what payment-method type the active payment is. If it
+ * contains "adyen", we mount the Drop-in; otherwise the hosted-fields form.
+ * The result is recorded on the checkout context as `isAdyenFlow`.
+ */
 export async function determineAdyenFlag(paymentId) {
   if (!paymentId) {
-    window.adyen = false;
+    setContext({ isAdyenFlow: false });
     return false;
   }
   try {
-    const paymentTypeData = await apiCall("/getPaymentMethodType", {
-      body: { paymentId },
-    });
+    const paymentTypeData = await apiCall("/getPaymentMethodType", { body: { paymentId } });
     if (paymentTypeData.success && paymentTypeData.paymentMethodType) {
       const containsAdyen = Object.values(paymentTypeData.paymentMethodType).some(
         (value) => typeof value === "string" && value.toLowerCase().includes("adyen")
       );
-      window.adyen = containsAdyen;
+      setContext({ isAdyenFlow: containsAdyen });
       return containsAdyen;
     }
   } catch (error) {
     console.warn("Error checking payment method type:", error, "defaulting adyen to false");
   }
-  window.adyen = false;
+  setContext({ isAdyenFlow: false });
   return false;
 }
 
 export async function getPaymentConfiguration() {
-  const { paymentMethod = "" } = getContext();
+  const { paymentMethod = "", paymentId } = getContext();
   const serverConfig = await apiCall("/getPaymentClientConfig", {
-    body: { paymentMethodId: paymentMethod, eventId: getEventId(), paymentId: window.paymentId },
+    body: { paymentMethodId: paymentMethod, eventId: getEventId(), paymentId },
   });
   return {
     environment: serverConfig.environment,
@@ -47,9 +48,7 @@ export async function getPaymentConfiguration() {
 
 export async function getPaymentResponse() {
   try {
-    return await apiCall("/getPaymentResponse", {
-      body: { paymentId: window.paymentId },
-    });
+    return await apiCall("/getPaymentResponse", { body: { paymentId: getContext().paymentId } });
   } catch (error) {
     console.warn("Failed to fetch payment response from server:", error);
     return null;
@@ -62,12 +61,13 @@ export async function getPaymentResponse() {
  * action payload back to the Drop-in so it can launch the challenge.
  */
 export async function handleAdyenSubmit(state, dropin) {
+  const { paymentId } = getContext();
   try {
     const resetEnabled = localStorage.getItem("resetPaymentAttemptEnabled") === "true";
     const result = await apiCall("/processAdyenPayment", {
       body: {
         externalData: JSON.stringify(state.data),
-        paymentId: window.paymentId,
+        paymentId,
         ...(resetEnabled ? { resetPaymentAttempt: true } : {}),
       },
       showErrorModal: false,
@@ -96,7 +96,7 @@ export async function handleAdyenSubmit(state, dropin) {
           endpoint: "/processAdyenPayment",
           error: result.error || "Payment failed",
           status: result.status || 400,
-          request: { body: { paymentId: window.paymentId } },
+          request: { body: { paymentId } },
           response: result,
         });
       }
@@ -106,10 +106,3 @@ export async function handleAdyenSubmit(state, dropin) {
     dropin.setStatus("error", { message: error.message || "Payment submission failed." });
   }
 }
-
-// Window aliases for legacy access from non-module code paths.
-window.fetchCheckoutData = fetchCheckoutData;
-window.determineAdyenFlag = determineAdyenFlag;
-window.getPaymentConfiguration = getPaymentConfiguration;
-window.getPaymentResponse = getPaymentResponse;
-window.handleAdyenSubmit = handleAdyenSubmit;
