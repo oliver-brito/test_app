@@ -1,4 +1,4 @@
-// endpoints/routes/login.js
+// server/routes/login.js
 import express from "express";
 import { setSession } from "../utils/sessionStore.js";
 import { filterCookieHeader } from "../utils/cookieUtils.js";

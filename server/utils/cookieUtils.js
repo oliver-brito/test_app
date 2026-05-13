@@ -1,4 +1,4 @@
-// endpoints/utils/cookieUtils.js
+// server/utils/cookieUtils.js
 
 import { getCookies, setCookies } from "../utils/sessionStore.js";
 

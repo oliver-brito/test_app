@@ -1,4 +1,4 @@
-// endpoints/routes/events.js (refactored to use common helpers)
+// server/routes/events.js (refactored to use common helpers)
 import express from "express";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
 import { printDebugMessage } from "../utils/debug.js";
