@@ -1,4 +1,4 @@
-// endpoints/server.js
+// server/index.js
 import express from "express";
 import dotenv from "dotenv";
 import fs from "fs";
@@ -15,7 +15,7 @@ import detailsRouter from "./routes/details.js";
 import paymentsRouter from "./routes/payments.js";
 import adyenRouter from "./routes/adyen.js"; 
 import seatsRouter from "./routes/seats.js";
-import threeDSRouter from "./routes/3ds.js";
+import threeDSRouter from "./routes/threeDS.js";
 import customerRouter from "./routes/customer.js";
 
 const __filename = fileURLToPath(import.meta.url);

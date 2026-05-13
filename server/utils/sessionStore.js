@@ -1,4 +1,4 @@
-// endpoints/utils/sessionStore.js
+// server/utils/sessionStore.js
 
 // Global session, cookies, and API base store
 let CURRENT_SESSION = null;

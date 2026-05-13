@@ -4,9 +4,9 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node endpoints/server.js",
-    "dev": "nodemon endpoints/server.js",
-    "lint": "eslint endpoints public/js",
+    "start": "node server/index.js",
+    "dev": "nodemon server/index.js",
+    "lint": "eslint server public/js",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run"

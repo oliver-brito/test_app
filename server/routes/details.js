@@ -1,4 +1,4 @@
-// endpoints/routes/details.js
+// server/routes/details.js
 import express from "express";
 import { printDebugMessage } from "../utils/debug.js";
 import { ENDPOINTS } from "../../public/js/endpoints.js";
