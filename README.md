@@ -123,21 +123,47 @@ public/
 
 ### A new route
 
-1. Create or open `server/routes/<area>.js`.
-2. Write a zod schema in `server/schemas/<area>.js`.
-3. Mount the route on its router with `validate(MySchema)`:
+Every route follows the same **define-and-mount** pattern: declare a named
+const via `handler({ body, run })` above the bottom-of-file route table.
+
+1. If the route accepts a body, write a zod schema in `server/schemas/<area>.js`.
+2. In `server/routes/<area>.js`, define the handler and mount it:
    ```js
-   import { validate } from "../middleware/validate.js";
+   import { handler } from "../middleware/handler.js";
+   import { ApiError } from "../middleware/errorHandler.js";
+   import { av } from "../services/av.js";
+   import { unwrap } from "../services/avResponse.js";
    import { MyBody } from "../schemas/area.js";
-   router.post("/myEndpoint", express.json(), validate(MyBody), async (req, res) => {
-     const result = await makeApiCallWithErrorHandling(res, ORDER_PATH, payload, "Failed");
-     if (!result) return; // upstream error already sent
-     res.json({ success: true, data: result.data });
+
+   const myEndpoint = handler({
+     body: MyBody,
+     async run({ paymentId }) {
+       const { data } = await av
+         .on(MY_ORDER)
+         .get(FIELD)
+         .post(ORDER_PATH)
+         .orFail("Something went wrong");
+
+       const value = unwrap(data, FIELD);
+       if (!value) throw new ApiError(404, "Not found");
+       return { success: true, value };
+     },
    });
+
+   router.post("/myEndpoint", myEndpoint);
    ```
-4. Register the router in `server/app.js` if it's a new file.
-5. Throwing inside the handler is fine — Express 5 propagates async errors to
-   `middleware/errorHandler.js` automatically.
+3. Register the router in `server/app.js` if it's a new file.
+
+**The standard handler shape, top to bottom:**
+- `run({ ...params, ...body, ...query }, { req, res })`
+- Build an av call with the `av` fluent builder. `.post(path).orFail(msg)`
+  throws `ApiError` on upstream failure; bare `.post(path)` returns the
+  raw triple.
+- `return` a plain object — the factory sends it as JSON and auto-appends
+  the per-request `backendApiCalls` trail.
+- `throw new ApiError(status, message, { details })` for explicit errors.
+- Return `undefined` only when something downstream already wrote the
+  response (e.g. `handleThreeDS`, `redirectToViewOrder`).
 
 ### A new page
 
