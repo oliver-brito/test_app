@@ -89,8 +89,8 @@ export async function handleUrlParameters(paymentId) {
 
   const payload = {
     paymentId: paymentId || null,
-    pa_response_information: encoded,
-    pa_response_URL: paResponseUrl,
+    paResponseInformation: encoded,
+    paResponseURL: paResponseUrl,
   };
 
   try {

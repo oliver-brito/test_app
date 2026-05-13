@@ -21,9 +21,11 @@ export async function runCheckoutSequence(res, { deliveryMethod, paymentMethod, 
   await getClientToken(ctx, { paymentId, paResponseURL });
   const details = await getPaymentDetails(ctx, paymentId);
 
+  // backendApiCalls is auto-attached by the handler factory (from the
+  // AsyncLocalStorage trail), so we don't return it here explicitly.
   return {
+    success: true,
     paymentId,
-    payment_details: details.data?.data?.[`Payments::${paymentId}`],
-    backendApiCalls: ctx.apiCalls,
+    paymentDetails: details.data?.data?.[`Payments::${paymentId}`],
   };
 }

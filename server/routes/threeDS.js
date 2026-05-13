@@ -20,13 +20,14 @@ const newTransactionId = () =>
 
 const processThreeDSResponse = handler({
   body: ProcessThreeDSResponseBody,
-  async run({ paymentId, pa_response_information, pa_response_URL }, { res }) {
-    // 1. Hand the PaRes back to av-avon.
+  async run({ paymentId, paResponseInformation, paResponseURL }, { res }) {
+    // 1. Hand the PaRes back to av-avon. (Wire fields stay snake_case;
+    // our API surface uses camelCase — translated here at the boundary.)
     const setResponse = await av
       .on(MY_ORDER)
       .set({
-        [paymentField(paymentId, PAYMENT_FIELDS.PA_RESPONSE_INFORMATION)]: pa_response_information,
-        [paymentField(paymentId, PAYMENT_FIELDS.PA_RESPONSE_URL)]: pa_response_URL,
+        [paymentField(paymentId, PAYMENT_FIELDS.PA_RESPONSE_INFORMATION)]: paResponseInformation,
+        [paymentField(paymentId, PAYMENT_FIELDS.PA_RESPONSE_URL)]: paResponseURL,
       })
       .get(PAYMENTS)
       .manual()

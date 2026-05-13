@@ -73,6 +73,7 @@ const listUpcoming = handler({
 
     printDebugMessage("Events upcoming fetched successfully");
     return {
+      success: true,
       events: Object.values(unwrap(data, SEARCH_RESULTS) || {}),
       rawResponse: data,
     };
@@ -95,7 +96,8 @@ const mapAvailability = handler({
       .orFail("getBestAvailable failed");
 
     printDebugMessage("Map availability fetched successfully");
-    return data;
+    // Spread the av-avon body so the UI can read .data.Admissions etc.
+    return { success: true, ...data };
   },
 });
 
@@ -113,7 +115,7 @@ const getEvent = handler({
       throw new ApiError(404, "Performance not found", { details: data });
     }
     printDebugMessage("Performance loaded successfully");
-    return { performance, rawResponse: data };
+    return { success: true, performance, rawResponse: data };
   },
 });
 
@@ -128,7 +130,7 @@ const mapPricing = handler({
       .orFail("loadMap(pricing) failed");
 
     printDebugMessage("Map pricing fetched successfully");
-    return { pricetypes: unwrap(data, PRICETYPES) || {}, rawResponse: data };
+    return { success: true, pricetypes: unwrap(data, PRICETYPES) || {}, rawResponse: data };
   },
 });
 

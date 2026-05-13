@@ -27,7 +27,7 @@ const getMyAccountDetails = handler({
     }
 
     printDebugMessage("Customer details retrieval successful");
-    return { success: true, response: data };
+    return { success: true, rawResponse: data };
   },
 });
 

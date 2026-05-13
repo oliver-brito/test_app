@@ -165,6 +165,46 @@ const via `handler({ body, run })` above the bottom-of-file route table.
 - Return `undefined` only when something downstream already wrote the
   response (e.g. `handleThreeDS`, `redirectToViewOrder`).
 
+### Request / response field standard
+
+All HTTP field names — both request body keys validated by zod and
+response body keys returned by handlers — are **camelCase**. The route
+translates to av-avon's snake_case wire format at the boundary
+(see `server/av/fields.js`'s `PAYMENT_FIELDS` constants).
+
+**Identifiers** carry an `Id` suffix:
+`paymentId`, `admissionId`, `eventId`, `priceTypeId`, `paymentMethodId`.
+
+**User-chosen options** carry a `Method` suffix where ambiguous:
+`deliveryMethod`, `paymentMethod`. The Adyen gateway's payment-method
+*identifier* is `paymentMethodId` (an Id), distinct from the chosen
+`paymentMethod` value.
+
+**Booleans** are written in affirmative form (`resetPaymentAttempt`,
+not `disableResetPaymentAttempt`).
+
+**Acronyms** stay uppercase: `paResponseURL`, `paRequestURL`, `apiBase`.
+
+**Response envelope:**
+
+```js
+// Success — returned by handler `run`
+{ success: true, ...domainFields, rawResponse?, backendApiCalls? }
+
+// Error — thrown via ApiError, formatted by middleware/errorHandler.js
+{ success: false, error, message, code?, status, details?, backendApiCalls? }
+```
+
+- Every success response carries `success: true`. Error responses carry
+  `success: false`.
+- Domain fields are **flat** at the top level (no `data:` or `response:`
+  wrapper). One exception: `/map/availability/:id` spreads the raw av-avon
+  body so the UI can read `data.data.Admissions`.
+- `rawResponse` is the optional full av-avon body, used by the UI's debug
+  flows (e.g. `event.js`'s `refreshSeats()`).
+- `backendApiCalls` is automatically appended by the handler factory —
+  routes should never write it by hand.
+
 ### A new page
 
 1. Add `public/<page>.html` with a single `<script type="module" src="js/pages/<page>.js">`.
