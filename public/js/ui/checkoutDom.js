@@ -1,0 +1,136 @@
+// DOM-rendering helpers for the checkout page. Builds the summary panel
+// and either the hosted-fields form or the Adyen Drop-in shell.
+//
+// `renderCheckoutInfo` writes HTML and then wires the submit button via
+// `addEventListener` — no inline `onClick=` handlers, no window globals.
+
+import { HostedFieldsManager } from "../adyen/hostedFields.js";
+import { renderAdyenDropIn } from "../adyen/adyenDropin.js";
+import { getContext, setContext, getEventId } from "../shared/checkoutContext.js";
+import { handleSubmit } from "../flows/paymentFlow.js";
+
+export function getCheckoutContext() {
+  const ctx = getContext();
+  return {
+    deliveryMethod: ctx.deliveryMethod || "",
+    paymentMethod: ctx.paymentMethod || "",
+    eventId: getEventId(),
+    resultDiv: document.getElementById("result"),
+  };
+}
+
+export function allowOverrideFromHashMaybe(tokens) {
+  if (!window.location.hash.includes("override")) return tokens;
+  const overrideToken = prompt(
+    "Override conversation token? Leave blank to use default.",
+    tokens.conversationToken
+  );
+  if (overrideToken) tokens.conversationToken = overrideToken;
+  const overridePaymentId = prompt(
+    "Override paymentId? Leave blank to use default.",
+    tokens.paymentId
+  );
+  if (overridePaymentId) {
+    tokens.paymentId = overridePaymentId;
+    setContext({ paymentId: overridePaymentId });
+  }
+  return tokens;
+}
+
+function renderSharedInfo(eventId, deliveryMethod, paymentMethod, pa_request_url, conversationToken, paymentId) {
+  return `
+    <div class="label">Event ID:</div><div class="value">${eventId}</div>
+    <div class="label">Delivery Method:</div><div class="value">${deliveryMethod}</div>
+    <div class="label">Payment Method:</div><div class="value">${paymentMethod}</div>
+    <div class="label">PA Request URL:</div><div class="value"><a href="${pa_request_url}" target="_blank">${pa_request_url}</a></div>
+    <div class="label">Conversation Token:</div><div class="value" id="conv-token-value">${conversationToken}</div>
+    <div class="label">Payment ID:</div><div class="value" id="payment-id-value">${paymentId}</div>
+    <button type="button" class="btn" id="change-info-btn" style="margin-bottom:16px; width:auto;">Change Info</button>
+  `;
+}
+
+export function renderCheckoutInfo(resultDiv, adyenFlag, eventId, deliveryMethod, paymentMethod, pa_request_url, conversationToken, paymentId) {
+  if (adyenFlag) {
+    resultDiv.innerHTML = renderSharedInfo(eventId, deliveryMethod, paymentMethod, pa_request_url, conversationToken, paymentId);
+    return;
+  }
+  resultDiv.innerHTML =
+    renderSharedInfo(eventId, deliveryMethod, paymentMethod, pa_request_url, conversationToken, paymentId) +
+    `
+      <form id="payment-form" method="post" action="process_payment" style="margin-top:24px;">
+        <h3>Payment Details</h3>
+        <label for="account_number-container">Account Number:</label>
+        <div id="account_number-container" class="hosted-field"></div>
+        <label for="cvv-container">CVV:</label>
+        <div id="cvv-container" class="hosted-field"></div>
+        <label for="exp_date-container">Expiration Date:</label>
+        <div id="exp_date-container" class="hosted-field"></div>
+        <label for="cardholder_name-container">Cardholder Name:</label>
+        <input
+          type="text"
+          name="BOset::BOorder::Payments::${paymentId}::cardholder_name"
+          maxlength="100"
+          class="input form-control"
+          value=""
+          title="Cardholder Name"
+          id="BOset::BOorder::Payments::${paymentId}::cardholder_name"
+          required
+          autocomplete="cc-name">
+        <button type="submit" class="btn" id="submit-button">Submit Payment</button>
+      </form>
+    `;
+
+  // The submit button is rendered above; wire it via addEventListener so we
+  // don't need an inline onClick (and the corresponding window.handleSubmit).
+  const form = resultDiv.querySelector("#payment-form");
+  form?.addEventListener("submit", handleSubmit);
+}
+
+export function initHostedFields(conversationToken, pa_request_url, resultDiv) {
+  const hostedFieldsManager = new HostedFieldsManager();
+  hostedFieldsManager.initializeHostedFields({
+    conversationToken,
+    paRequestUrl: pa_request_url,
+    resultContainer: resultDiv,
+    onStatusUpdate: (fieldName, status, allStatuses) => {
+      const allValid = Object.values(allStatuses).every((s) => s && s.isValid);
+      if (allValid) console.log("All payment fields are now valid.");
+    },
+    onError: (error) => console.error("Hosted fields error:", error),
+  });
+}
+
+export function wireChangeInfoButton(conversationTokenRef, paymentIdRef, resultDiv) {
+  const el = document.getElementById("change-info-btn");
+  if (!el) return;
+  el.onclick = function () {
+    const newToken = prompt(
+      "Override conversation token? Leave blank to use current.",
+      conversationTokenRef.value
+    );
+    if (newToken !== null && newToken !== "") conversationTokenRef.value = newToken;
+    const newPaymentId = prompt("Override paymentId? Leave blank to use current.", paymentIdRef.value);
+    if (newPaymentId !== null && newPaymentId !== "") {
+      paymentIdRef.value = newPaymentId;
+      setContext({ paymentId: newPaymentId });
+    }
+    const convEl = document.getElementById("conv-token-value");
+    if (convEl) convEl.textContent = conversationTokenRef.value;
+    const pidEl = document.getElementById("payment-id-value");
+    if (pidEl) pidEl.textContent = paymentIdRef.value;
+
+    const { isAdyenFlow } = getContext();
+    renderCheckoutInfo(
+      resultDiv,
+      isAdyenFlow,
+      conversationTokenRef.eventId,
+      conversationTokenRef.deliveryMethod,
+      conversationTokenRef.paymentMethod,
+      conversationTokenRef.pa_request_url,
+      conversationTokenRef.value,
+      paymentIdRef.value
+    );
+    if (isAdyenFlow) renderAdyenDropIn(resultDiv);
+    else initHostedFields(conversationTokenRef.value, conversationTokenRef.pa_request_url, resultDiv);
+  };
+}

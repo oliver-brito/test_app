@@ -5,30 +5,18 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Checkout (Mock)</title>
 
-  <!-- Define global flags before anything else -->
-  <script>
-    window.adyen = false; // Will be set dynamically based on payment method type
-  </script>
-
-  <!-- Hosted fields and helper scripts -->
-  <script src="js/hostedFields.js"></script>
-
   <script src="https://checkoutshopper-live.cdn.adyen.com/checkoutshopper/sdk/6.23.0/adyen.js"
       integrity="sha384-fwC67LcglMpjyKzY7kj0vMbD5b9MZAzsxBj4M92eh7d3vtaBa0hKdUHCUVpHeb2K"
       crossorigin="anonymous"></script>
-	 
-	<link rel="stylesheet"
-	     href="https://checkoutshopper-live.cdn.adyen.com/checkoutshopper/sdk/6.23.0/adyen.css"
-	     integrity="sha384-GQvTx/DKyDwPrqukLGTOBzAUHwXJkuUv8vwhr0ynfUapxHMCrzk84rMbd3Q/i74t"
-	     crossorigin="anonymous">
+
+  <link rel="stylesheet"
+       href="https://checkoutshopper-live.cdn.adyen.com/checkoutshopper/sdk/6.23.0/adyen.css"
+       integrity="sha384-GQvTx/DKyDwPrqukLGTOBzAUHwXJkuUv8vwhr0ynfUapxHMCrzk84rMbd3Q/i74t"
+       crossorigin="anonymous">
 
   <link rel="stylesheet" href="css/navigation.css">
   <link rel="stylesheet" href="css/checkout.css">
-  <script src="js/errorModal.js"></script>
-  <script src="js/apiDebugConsole.js"></script>
-  <script src="js/apiWrapper.js"></script>
-  <script src="js/authHelper.js"></script>
-  <script src="js/navigation.js"></script>
+  <script type="module" src="js/pages/checkout.js"></script>
 </head>
 
 <body>
@@ -67,47 +55,7 @@
   <div id="details-content" style="background:#f3f4f6; padding:16px; border-radius:8px; font-size:14px; max-height:60vh; overflow:auto;"></div>
     </div>
   </div>
-  <script src="js/utils.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/dom.js"></script>
-  <script src="js/adyen.js"></script>
-  <script src="js/checkout.js"></script>
-  <script src="js/submit.js"></script>
-  <script>
-    (async function() {
-      // Check auth and refresh server credentials before proceeding
-      if (!(await window.checkAndRefreshAuth())) {
-        return; // Will redirect to login
-      }
-
-      try {
-        /*
-          When we load the page, we can be in two situations:
-          1. Normal checkout flow: user just landed on checkout.html to start payment
-          2. 3DS flow returning from issuer: user is returning from the bank's authentication page with URL parameters
-             that we need to handle to complete the payment.
-          In case 2, we need to handle the URL parameters first before proceeding with the checkout orchestration.
-        */
-        var localStoragePaymentID = localStorage.getItem('paymentID');
-        var result = handleUrlParameters(localStoragePaymentID);
-        // handleUrlParameters may return a promise or a sync value
-        if (result && typeof result.then === 'function') result = await result;
-        if (result && typeof result.then === 'function') {
-          // defensive: if it still returns a promise, await it
-          result = await result;
-        }
-        // kick off orchestrator after helper scripts are loaded
-        const checkoutMode = new URLSearchParams(location.search).get('mode');
-        const returningFromRedirect = !!window.location.search && !checkoutMode;
-        const checkoutFn = ((checkoutMode === 'reusePayment' || returningFromRedirect) && typeof window.doCheckoutReusePayment === 'function')
-          ? window.doCheckoutReusePayment
-          : window.doCheckout;
-        if (typeof checkoutFn === 'function' && !(result && result.urlHandled)) checkoutFn();
-      } catch (e) {
-        console.error('Error handling URL parameters:', e);
-        if (typeof window.doCheckout === 'function') window.doCheckout();
-      }
-    })();
-  </script>
+  <!-- Bootstrap, side-effect modules, and page logic all loaded via
+       js/pages/checkout.js. -->
 </body>
 </html>

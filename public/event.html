@@ -6,12 +6,7 @@
   <title>Event Details</title>
   <link rel="stylesheet" href="css/navigation.css">
   <link rel="stylesheet" href="css/event.css">
-  <script src="js/helpers.js"></script>
-  <script src="js/errorModal.js"></script>
-  <script src="js/apiDebugConsole.js"></script>
-  <script src="js/apiWrapper.js"></script>
-  <script src="js/authHelper.js"></script>
-  <script src="js/navigation.js"></script>
+  <script type="module" src="js/pages/event.js"></script>
 </head>
 <body>
   <!-- Navigation (loaded by navigation.js) -->
@@ -42,6 +37,8 @@
       <select id="pricetype" class="input"></select>
       <input id="pricetype_value" type="hidden" />
       <button id="best" class="btn">Get Seats & Add</button>
+      <select id="delivery" class="input" style="margin-left:10px; display:none;"></select>
+      <select id="payment" class="input" style="margin-left:10px; display:none;"></select>
       <a id="checkout" class="btn btn-secondary" href="checkout.html" style="display:none;">Checkout</a>
       <label id="reuse-payment-label" style="display:none; align-items:center; gap:6px; font-size:14px; cursor:pointer;">
         <input type="checkbox" id="reuse-payment">
@@ -56,6 +53,5 @@
     </div>
   </div>
 
-  <script src="js/event.js"></script>
 </body>
 </html>
