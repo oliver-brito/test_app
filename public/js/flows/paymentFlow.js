@@ -61,7 +61,10 @@ async function processTransaction(paymentData, paymentId) {
       },
     };
 
-    const result = await apiCall("/transaction", { body: payload });
+    // showErrorModal:false — a 402 here means "3DS required", which we
+    // handle by mounting the Cardinal iframe below. Letting apiCall auto-pop
+    // its error modal on the 402 would hide the response from this handler.
+    const result = await apiCall("/transaction", { body: payload, showErrorModal: false });
 
     if (result.error === "3ds required" && result.paRequestInfo && result.paRequestURL) {
       const threeDSResult = await launch3DSChallenge({
