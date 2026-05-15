@@ -56,5 +56,11 @@ export function errorHandler(err, req, res, _next) {
   }
 
   printDebugMessage(`Unhandled error in ${req.method} ${req.path}: ${err?.stack || err}`);
-  return res.status(500).json({ error: err?.message || "Internal server error" });
+  // Node's fetch puts the real reason on err.cause — surface it so the
+  // browser's error modal shows something more useful than "fetch failed".
+  const cause =
+    err?.cause?.code || err?.cause?.message || (err?.cause ? String(err.cause) : undefined);
+  return res
+    .status(500)
+    .json({ error: err?.message || "Internal server error", ...(cause ? { cause } : {}) });
 }

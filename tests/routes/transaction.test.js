@@ -11,7 +11,7 @@ vi.mock("../../server/services/order.js", async (importOriginal) => {
 const { insertOrder } = await import("../../server/services/order.js");
 const { createApp } = await import("../../server/app.js");
 
-const app = createApp({ enableLogging: false });
+const app = createApp({ enableLogging: false, enableSessionGate: false });
 
 describe("POST /transaction", () => {
   beforeEach(() => {
