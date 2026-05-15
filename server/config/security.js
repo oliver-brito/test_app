@@ -1,10 +1,19 @@
 import helmet from "helmet";
 
+// Origins our pages legitimately load resources from:
+//   *.adyen.com           — Adyen Drop-in SDK + iframes
+//   *.google.com          — Adyen pay-button fallbacks
+//   *.apple.com           — Apple Pay
+//   *.cardinalcommerce.com — Cardinal Cruise (3DS challenge iframe)
+//   *.cardinaltrusted.com  — Cardinal Cruise Collect endpoint (cas.client.cardinaltrusted.com)
+//   *.audienceview.com     — UPS hosted-fields SDK + payment form iframe
 const ALLOWED = [
   "https://*.adyen.com",
   "https://*.google.com",
   "https://*.apple.com",
   "https://*.cardinalcommerce.com",
+  "https://*.cardinaltrusted.com",
+  "https://*.audienceview.com",
 ];
 
 export const securityMiddleware = helmet({

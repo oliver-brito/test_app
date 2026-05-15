@@ -91,10 +91,10 @@ async function doCheckoutReusePayment() {
     let result = handleUrlParameters(storedPaymentId);
     if (result && typeof result.then === "function") result = await result;
 
+    // Only the explicit "reuse payment session" checkbox should reuse the
+    // stored paymentId. Don't infer it from `?eventId=...` being present.
     const checkoutMode = new URLSearchParams(location.search).get("mode");
-    const returningFromRedirect = !!window.location.search && !checkoutMode;
-    const checkoutFn =
-      checkoutMode === "reusePayment" || returningFromRedirect ? doCheckoutReusePayment : doCheckout;
+    const checkoutFn = checkoutMode === "reusePayment" ? doCheckoutReusePayment : doCheckout;
     if (!(result && result.urlHandled)) checkoutFn();
   } catch (e) {
     console.error("Error handling URL parameters:", e);

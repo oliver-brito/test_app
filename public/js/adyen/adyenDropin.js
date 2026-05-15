@@ -76,13 +76,28 @@ function encodePaResponseInformation(query) {
     .join("");
 }
 
+/** Known 3DS / Cardinal / UPS return-URL params. If none of these are
+ * present, the query string is just our own routing (e.g. ?eventId=01)
+ * and we don't have a PaRes to submit. */
+const THREE_DS_PARAM_NAMES = ["PaRes", "MD", "cres", "threeDSSessionData", "transStatus"];
+
+function looksLikeThreeDSReturn(searchString) {
+  if (!searchString) return false;
+  const params = new URLSearchParams(searchString);
+  return THREE_DS_PARAM_NAMES.some((name) => params.has(name));
+}
+
 /**
- * Handle URL parameters returned from an Adyen 3DS authentication redirect.
+ * Handle URL parameters returned from a 3DS authentication redirect.
  * Encodes the query string and POSTs it to /processThreeDSResponse.
+ * Returns { urlHandled: false } immediately when the query doesn't look
+ * like a 3DS return (so a normal `?eventId=...` page load doesn't fire
+ * a spurious request).
  */
 export async function handleUrlParameters(paymentId) {
   const query = window.location.search.substring(1);
   if (!query) return { urlHandled: false };
+  if (!looksLikeThreeDSReturn(query)) return { urlHandled: false };
 
   const encoded = encodePaResponseInformation(query);
   const paResponseUrl = window.location.href || window.location.origin + "/checkout.html";

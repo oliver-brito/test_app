@@ -44,6 +44,9 @@ export const _apiDebugConsoleLoaded = true;
             <span id="call-count" style="color:#858585; font-size:11px;">0 calls</span>
           </div>
           <div style="display:flex; gap:8px;">
+            <button id="copy-all-console-btn" style="background:transparent; color:#858585; border:1px solid #454545; border-radius:3px; padding:4px 10px; cursor:pointer; font-size:11px; transition:all 0.2s;" onmouseover="this.style.background='#3e3e3e'; this.style.color='#d4d4d4'" onmouseout="this.style.background='transparent'; this.style.color='#858585'" title="Copy all logs to clipboard as JSON">
+              Copy All
+            </button>
             <button id="clear-console-btn" style="background:transparent; color:#858585; border:1px solid #454545; border-radius:3px; padding:4px 10px; cursor:pointer; font-size:11px; transition:all 0.2s;" onmouseover="this.style.background='#3e3e3e'; this.style.color='#d4d4d4'" onmouseout="this.style.background='transparent'; this.style.color='#858585'" title="Clear all logs">
               Clear
             </button>
@@ -180,11 +183,24 @@ export const _apiDebugConsoleLoaded = true;
     const showBtn = document.getElementById('show-console-btn');
     const toggleBtn = document.getElementById('toggle-console-btn');
     const clearBtn = document.getElementById('clear-console-btn');
+    const copyAllBtn = document.getElementById('copy-all-console-btn');
     const header = document.getElementById('console-header');
 
     // Show/hide console
     showBtn.onclick = () => showConsole();
     toggleBtn.onclick = () => hideConsole();
+
+    // Copy all logs to clipboard as pretty-printed JSON.
+    copyAllBtn.onclick = () => {
+      if (apiCallLogs.length === 0) {
+        // Brief visual feedback for the empty case.
+        const original = copyAllBtn.textContent;
+        copyAllBtn.textContent = 'Nothing to copy';
+        setTimeout(() => { copyAllBtn.textContent = original; }, 1500);
+        return;
+      }
+      copyToClipboard(JSON.stringify(apiCallLogs, null, 2), 'copy-all-console-btn');
+    };
 
     // Clear logs
     clearBtn.onclick = () => {
