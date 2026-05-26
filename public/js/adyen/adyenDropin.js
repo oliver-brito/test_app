@@ -79,7 +79,15 @@ function encodePaResponseInformation(query) {
 /** Known 3DS / Cardinal / UPS return-URL params. If none of these are
  * present, the query string is just our own routing (e.g. ?eventId=01)
  * and we don't have a PaRes to submit. */
-const THREE_DS_PARAM_NAMES = ["PaRes", "MD", "cres", "threeDSSessionData", "transStatus"];
+const THREE_DS_PARAM_NAMES = [
+  "PaRes",
+  "MD",
+  "cres",
+  "threeDSSessionData",
+  "transStatus",
+  "redirectResult",
+  "payload",
+];
 
 function looksLikeThreeDSReturn(searchString) {
   if (!searchString) return false;
